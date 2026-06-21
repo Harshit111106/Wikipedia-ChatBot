@@ -1,0 +1,14 @@
+# Python virtual environment
+backend/.venv/
+frontend/.venv/
+
+# Environment secrets
+backend/.env
+
+# Python cache files
+**/__pycache__/
+*.pyc
+
+# Ignore Mac system files everywhere
+.DS_Store
+**/.DS_Store
