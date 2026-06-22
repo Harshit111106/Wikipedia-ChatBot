@@ -1,6 +1,6 @@
 # Wikipedia Knowledge Retrieval-Augmented Generation (RAG) Engine
 
-A production-ready, full-stack, decoupled RAG application that allows users to dynamically ingest any Wikipedia page into a local vector database and perform accurate, context-bound question answering using an advanced Language Model.
+A production-ready, full-stack, decoupled RAG application that allows users to dynamically search and ingest any Wikipedia topic into a local vector database and perform accurate, context-bound question answering using an advanced Language Model.
 
 ---
 
@@ -10,6 +10,7 @@ The application is engineered with a strict separation of concerns, dividing the
 
 ### Backend (Python & FastAPI)
 * **API Framework:** FastAPI with Uvicorn (Asynchronous server gateway)
+* **Search Integration:** Wikipedia MediaWiki OpenSearch API (Handles query fuzzy matching and auto-corrections)
 * **Orchestration Layer:** LangChain (Document loading, text splitting, and pipeline routing)
 * **Vector Database:** ChromaDB (Local vector storage matrix)
 * **Embedding Model:** HuggingFace `all-MiniLM-L6-v2` (Executed entirely locally)
@@ -75,9 +76,10 @@ Because the frontend interface is engineered using pure web standards, no comple
 
 ## 🚀 Operational Workflow
 
-1. **Knowledge Ingestion (Scrape ➔ Chunk ➔ Embed ➔ Store):**
-   * The user inputs a target Wikipedia URL into the frontend panel.
-   * The backend extracts raw text content layers, stripping away noisy HTML elements using `BeautifulSoup`.
+1. **Fuzzy Search & Ingestion (Search ➔ Scrape ➔ Chunk ➔ Embed ➔ Store):**
+   * The user types any keyword, phrase, or poorly-spelled topic (e.g., `"viyat koli"`) into the UI input panel.
+   * The backend fires an internal request to the **Wikipedia OpenSearch API**. The API automatically corrects typos and maps the input string to the closest high-ranking matching article path.
+   * The backend extracts raw text content layers from the resolved page URL, stripping away noisy HTML elements using `BeautifulSoup`.
    * The document text is broken down into structured semantic fragments using a `RecursiveCharacterTextSplitter` configured with a chunk size of 1000 characters and a 200-character overlap.
    * Fragments are mapped to 384-dimensional vector spaces natively using `HuggingFaceEmbeddings` and indexed safely within a local `ChromaDB` collection.
 
@@ -91,6 +93,7 @@ Because the frontend interface is engineered using pure web standards, no comple
 
 ## 🔒 Engineered Features & Safeguards
 
+* **Fuzzy Autocorrect Ingestion:** Upgraded user onboarding from static URL copying to a resilient, search-driven ingestion engine that intelligently handles spelling errors and missing characters natively.
 * **Anti-Hallucination Guardrails:** The core LLM prompt enforces strict alignment rules. If retrieved vector contexts do not satisfy the baseline information requirements needed to answer a query, the model is instructed to explicitly state that it cannot verify the fact rather than generating ungrounded assertions.
 * **Optimized Retrieval Window:** Tuned the similarity retrieval matrix to fetch $k=6$ context nodes. This ensures that high-level introductory biographical outlines and dense historical data matrices are captured together during vector execution.
 * **Cross-Origin Security:** Full CORS (Cross-Origin Resource Sharing) middleware configurations are integrated natively into the FastAPI pipeline to enable seamless, authenticated cross-origin browser interactions during standard development routines.
