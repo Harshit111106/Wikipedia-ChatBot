@@ -1,29 +1,23 @@
-import wikipediaapi
+import requests
+from bs4 import BeautifulSoup
 
-def scrape_wikipedia_page(url: str) -> str:
-    """
-    Takes a full Wikipedia URL, extracts the topic title, 
-    and returns the clean, raw text content of the page.
-    """
-    # 1. Parse the page title from the URL
-    if "wiki/" not in url:
-        raise ValueError("Invalid Wikipedia URL. Please provide a standard Wikipedia link.")
+def scrape_wikipedia(url: str) -> str:
+    """Scrapes raw text from a given Wikipedia URL, discarding styles and navigation text."""
+    headers = {"User-Agent": "WikiRAGEngine/1.0 (contact: email@example.com)"}
+    response = requests.get(url, headers=headers)
     
-    # Extracts everything after 'wiki/' and replaces underscores with spaces
-    page_title = url.split("wiki/")[-1].replace("_", " ")
-
-    # 2. Initialize Wikipedia API with a mandatory custom User-Agent
-    wiki = wikipediaapi.Wikipedia(
-        user_agent="WikiRAGChatbot/1.0 (your_email@example.com)",
-        language="en"
-    )
-
-    # 3. Fetch the page object
-    page = wiki.page(page_title)
-
-    # 4. Verify if the page actually exists
-    if not page.exists():
-        raise FileNotFoundError(f"The Wikipedia page for '{page_title}' could not be found.")
-
-    # 5. Return the clean text (automatically excludes sidebars, templates, and HTML clutter)
-    return page.text
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch Wikipedia page. Status code: {response.status_code}")
+        
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    # Target only the main article text area
+    content_div = soup.find(id="mw-content-text")
+    if not content_div:
+        raise Exception("Could not find main content text in the Wikipedia page.")
+        
+    # Extract paragraphs
+    paragraphs = content_div.find_all("p")
+    text_content = " ".join([p.get_text() for p in paragraphs if p.get_text().strip()])
+    
+    return text_content

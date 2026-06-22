@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from app.services.manager import ingest_wikipedia_url, answer_user_query
+from app.services.manager import answer_user_query, ingest_wikipedia_by_query
 
 # 1. Initialize the FastAPI application
 app = FastAPI(
@@ -33,11 +33,17 @@ def read_root():
     return {"status": "online", "message": "Wikipedia RAG API is running smoothly."}
 
 # 5. Ingestion Endpoint
+# Update your Pydantic model to expect a query string
+class IngestRequest(BaseModel):
+    query: str  # Changed from url to query
+
+# Update the endpoint logic
 @app.post("/api/ingest")
 def ingest_url(payload: IngestRequest):
-    """Takes a Wikipedia URL, scrapes it, chunks it, and saves it to ChromaDB."""
+    """Takes a search topic, resolves it to a Wikipedia page, and embeds it."""
     try:
-        result = ingest_wikipedia_url(payload.url)
+        # Call our new query search-ingestion manager function
+        result = ingest_wikipedia_by_query(payload.query)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")

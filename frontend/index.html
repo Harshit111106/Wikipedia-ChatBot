@@ -41,16 +41,16 @@
             
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-medium text-gray-400 mb-1">Wikipedia URL</label>
-                    <input type="url" id="wikiUrl" 
-                           placeholder="https://en.wikipedia.org/wiki/..." 
-                           class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors">
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Wikipedia Topic / Keyword</label>
+            <input type="text" id="wikiUrl" 
+                   placeholder="e.g., Space Shuttle, MS Dhoni, AI..." 
+                   class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors">
                 </div>
                 
                 <button onclick="ingestUrl()" id="ingestBtn" 
-                        class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm py-2 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 cursor-pointer">
-                    Ingest & Embed Data
-                </button>
+                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm py-2 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 cursor-pointer">
+            Search & Ingest Data
+        </button>
 
                 <div id="ingestStatus" class="hidden text-xs p-3 rounded-lg border"></div>
             </div>
@@ -87,46 +87,46 @@
         const API_BASE = "http://127.0.0.1:8000/api";
 
         async function ingestUrl() {
-            const urlInput = document.getElementById('wikiUrl');
-            const statusDiv = document.getElementById('ingestStatus');
-            const btn = document.getElementById('ingestBtn');
-            
-            if (!urlInput.value.trim()) {
-                alert("Please paste a valid URL first.");
-                return;
-            }
+    const urlInput = document.getElementById('wikiUrl');
+    const statusDiv = document.getElementById('ingestStatus');
+    const btn = document.getElementById('ingestBtn');
+    
+    if (!urlInput.value.trim()) {
+        alert("Please enter a valid topic or keyword first.");
+        return;
+    }
 
-            // UI State: Loading
-            btn.disabled = true;
-            btn.innerHTML = `<div class="loading-spinner"></div> Processing...`;
-            statusDiv.className = "text-xs p-3 rounded-lg border bg-blue-950/30 text-blue-400 border-blue-800";
-            statusDiv.innerText = "Scraping text layers, computing chunks, and loading embeddings natively...";
-            statusDiv.classList.remove('hidden');
+    // UI State: Loading
+    btn.disabled = true;
+    btn.innerHTML = `<div class="loading-spinner"></div> Processing...`;
+    statusDiv.className = "text-xs p-3 rounded-lg border bg-blue-950/30 text-blue-400 border-blue-800";
+    statusDiv.innerText = "Searching Wikipedia, scraping text layers, and computing local embeddings...";
+    statusDiv.classList.remove('hidden');
 
-            try {
-                const response = await fetch(`${API_BASE}/ingest`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: urlInput.value.trim() })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    statusDiv.className = "text-xs p-3 rounded-lg border bg-green-950/40 text-green-400 border-green-800";
-                    statusDiv.innerText = `✅ ${data.message || 'Ingestion complete!'}`;
-                    urlInput.value = ""; // Clear input on success
-                } else {
-                    throw new Error(data.detail || "Server thrown unexpected ingestion fault.");
-                }
-            } catch (err) {
-                statusDiv.className = "text-xs p-3 rounded-lg border bg-red-950/40 text-red-400 border-red-800";
-                statusDiv.innerText = `❌ Error: ${err.message}`;
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = "Ingest & Embed Data";
-            }
+    try {
+        const response = await fetch(`${API_BASE}/ingest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: urlInput.value.trim() }) // 👈 Changed key from 'url' to 'query'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            statusDiv.className = "text-xs p-3 rounded-lg border bg-green-950/40 text-green-400 border-green-800";
+            statusDiv.innerText = `✅ ${data.message || 'Ingestion complete!'}`;
+            urlInput.value = ""; // Clear input on success
+        } else {
+            throw new Error(data.detail || "Server threw an unexpected ingestion fault.");
         }
+    } catch (err) {
+        statusDiv.className = "text-xs p-3 rounded-lg border bg-red-950/40 text-red-400 border-red-800";
+        statusDiv.innerText = `❌ Error: ${err.message}`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "Search & Ingest Data"; // 👈 Updated UI label fallback text
+    }
+}
 
         async function sendQuery() {
             const questionInput = document.getElementById('userQuestion');
