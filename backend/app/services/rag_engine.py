@@ -4,7 +4,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
 # Define where ChromaDB will save its data locally on your Mac
-CHROMA_DATA_DIR = os.path.join(os.path.dirname(__file__), "../../../chroma_db")
+CHROMA_DATA_DIR = "/tmp/chroma_db"
 
 # Use a pure-Python native embedding model (No Ollama server dependency)
 # This model is tiny (~45MB) and runs directly inside your Python process safely
