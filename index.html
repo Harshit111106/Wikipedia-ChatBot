@@ -88,141 +88,189 @@
     </main>
 
     <script>
-    // 1. Establish session isolation tracking token using browser tab sessionStorage
-    if (!sessionStorage.getItem("wikipedia_rag_token")) {
-        const freshToken = "session_" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-        sessionStorage.setItem("wikipedia_rag_token", freshToken);
-    }
-    const USER_SESSION_ID = sessionStorage.getItem("wikipedia_rag_token");
-
-    // Unified Live Backend Base Endpoint
-    const API_BASE = "https://harshit-1106-wikipedia-rag-backend.hf.space/api";
-
-    // 2. Dynamic Search & Ingestion Controller
-    async function ingestUrl() {
-        const urlInput = document.getElementById('wikiUrl');
-        const statusDiv = document.getElementById('ingestStatus');
-        const btn = document.getElementById('ingestBtn');
+        // 1. Configuration: Point to your live Hugging Face backend API
+        const API_BASE = "https://harshit-1106-wikipedia-rag-backend.hf.space/api";
+    
+        // 2. Session Isolation: Generate or reuse a unique token specific to this single browser tab
+        if (!sessionStorage.getItem("user_session_id")) {
+            const uniqueId = "session_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+            sessionStorage.setItem("user_session_id", uniqueId);
+        }
+        const USER_SESSION_ID = sessionStorage.getItem("user_session_id");
+        console.log("Current Active Session ID:", USER_SESSION_ID);
+    
+        // 3. DOM Elements (Ensure these match the ID attributes in your HTML markup)
+        const topicInput = document.querySelector('input[placeholder*="Space Shuttle"]'); 
+        const ingestBtn = document.querySelector('button:contains("Search & Ingest")') || document.querySelectorAll('button')[0];
+        const contextStatus = document.querySelector('.Active\\ Context\\:') || document.getElementById('context-status');
         
-        if (!urlInput.value.trim()) {
-            alert("Please enter a valid topic or keyword first.");
-            return;
+        const questionInput = document.querySelector('input[placeholder*="Ask a question"]');
+        const askBtn = document.querySelector('button:contains("Ask Engine")') || document.querySelectorAll('button')[1];
+        const chatContainer = document.querySelector('.Contextual\\ Query\\ Retrieval') || document.getElementById('chat-container');
+    
+        // 4. Helper Function: Standardized Error Parsing to stop [object Object]
+        async function handleServerError(response) {
+            try {
+                const errorData = await response.json();
+                // Pull FastAPI validation details if present, otherwise fall back to raw message string
+                if (errorData.detail) {
+                    return typeof errorData.detail === 'object' 
+                        ? JSON.stringify(errorData.detail) 
+                        : errorData.detail;
+                }
+                return "An unmapped backend error occurred.";
+            } catch (e) {
+                return `Server returned status status code: ${response.status}`;
+            }
         }
-
-        // UI State: Loading
-        btn.disabled = true;
-        btn.innerHTML = `<div class="loading-spinner"></div> Processing...`;
-        statusDiv.className = "text-xs p-3 rounded-lg border bg-blue-950/30 text-blue-400 border-blue-800";
-        statusDiv.innerText = "Searching Wikipedia, scraping text layers, and computing local embeddings...";
-        statusDiv.classList.remove('hidden');
-
-        try {
-            const response = await fetch(`${API_BASE}/ingest`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    query: urlInput.value.trim(),
-                    session_id: USER_SESSION_ID // 👈 Session Tracking Attached
-                }) 
-            });
+    
+        // 5. Core Action: Ingest Wikipedia Topic
+        async function searchAndIngestData() {
+            const topic = topicInput.value.trim();
+            if (!topic) return alert("Please enter a valid Wikipedia topic or URL first!");
+    
+            // Update UI to show active loading state
+            ingestBtn.disabled = true;
+            ingestBtn.innerText = "Ingesting...";
             
-            const data = await response.json();
+            try {
+                const response = await fetch(`${API_BASE}/ingest`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        query: topic,               // Maps to payload.query on FastAPI
+                        session_id: USER_SESSION_ID  // Maps to payload.session_id on FastAPI
+                    })
+                });
+    
+                if (!response.ok) {
+                    const errorMsg = await handleServerError(response);
+                    throw new Error(errorMsg);
+                }
+    
+                const data = await response.json();
+                
+                // Render success box on screen based on your app UI layout
+                showStatusMessage(`✅ Successfully found and ingested article: '${data.title || topic}'`, "success");
+                
+            } catch (error) {
+                console.error("Ingestion Fault:", error);
+                showStatusMessage(`❌ Error: ${error.message}`, "error");
+            } finally {
+                ingestBtn.disabled = false;
+                ingestBtn.innerText = "Search & Ingest Data";
+            }
+        }
+    
+        // 6. Core Action: Query LLM Knowledge Base
+        async function askEngineQuery() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+    
+            // Append user query message bubble into UI viewport
+            appendChatBubble(question, "user");
+            questionInput.value = ""; // Clear input immediately
             
-            if (response.ok) {
-                statusDiv.className = "text-xs p-3 rounded-lg border bg-green-950/40 text-green-400 border-green-800";
-                // Uses the dynamic title returned from backend if available, fallback to message
-                statusDiv.innerText = data.title ? `Active Context: 📖 ${data.title}` : `✅ ${data.message || 'Ingestion complete!'}`;
-                urlInput.value = ""; // Clear input on success
+            try {
+                const response = await fetch(`${API_BASE}/query`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        question: question,         // Maps to payload.question on FastAPI
+                        session_id: USER_SESSION_ID  // Maps to payload.session_id on FastAPI
+                    })
+                });
+    
+                if (!response.ok) {
+                    const errorMsg = await handleServerError(response);
+                    throw new Error(errorMsg);
+                }
+    
+                const data = await response.json();
+                
+                // Append system response answer bubble into UI viewport
+                appendChatBubble(data.answer, "system", data.sources_used || 4);
+    
+            } catch (error) {
+                console.error("Query Fault:", error);
+                appendChatBubble(`❌ Request Failed: ${error.message}`, "system-error");
+            }
+        }
+    
+        // 7. UI Presentation Helper Methods
+        function showStatusMessage(message, type) {
+            // Look for an existing message banner container or create one dynamically
+            let statusBox = document.getElementById("api-status-banner");
+            if (!statusBox) {
+                statusBox = document.createElement("div");
+                statusBox.id = "api-status-banner";
+                // Insert it under the ingestion section
+                topicInput.parentElement.appendChild(statusBox);
+            }
+            
+            statusBox.innerText = message;
+            statusBox.className = ""; // Reset old styles
+            statusBox.style.marginTop = "12px";
+            statusBox.style.padding = "10px";
+            statusBox.style.borderRadius = "6px";
+            statusBox.style.fontSize = "13px";
+            
+            if (type === "success") {
+                statusBox.style.backgroundColor = "rgba(21, 128, 61, 0.2)";
+                statusBox.style.border = "1px solid #15803d";
+                statusBox.style.color = "#4ade80";
             } else {
-                throw new Error(data.detail || "Server threw an unexpected ingestion fault.");
+                statusBox.style.backgroundColor = "rgba(153, 27, 27, 0.2)";
+                statusBox.style.border = "1px solid #991b1b";
+                statusBox.style.color = "#fca5a5";
             }
-        } catch (err) {
-            statusDiv.className = "text-xs p-3 rounded-lg border bg-red-950/40 text-red-400 border-red-800";
-            statusDiv.innerText = `❌ Error: ${err.message}`;
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = "Search & Ingest Data"; 
         }
-    }
-
-    // 3. Isolated Contextual Query Controller
-    async function sendQuery() {
-        const questionInput = document.getElementById('userQuestion');
-        const chatBox = document.getElementById('chatBox');
-        const btn = document.getElementById('queryBtn');
-        const question = questionInput.value.trim();
-
-        if (!question) return;
-
-        // Render User Question Bubble
-        chatBox.innerHTML += `
-            <div class="flex justify-end">
-                <div class="bg-blue-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-none max-w-xl shadow-md">
-                    ${question}
-                </div>
-            </div>
-        `;
-        questionInput.value = ""; // Instant input wipe
-        chatBox.scrollTop = chatBox.scrollHeight;
-
-        // Render Loading Template Placeholder
-        const loadingId = 'load-' + Date.now();
-        chatBox.innerHTML += `
-            <div class="flex justify-start items-center gap-3" id="${loadingId}">
-                <div class="bg-gray-800 border border-gray-700 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-none max-w-xl flex items-center gap-3 shadow-md">
-                    <div class="loading-spinner"></div>
-                    <span class="text-xs text-gray-400 font-mono animate-pulse">Retrieving vector contexts...</span>
-                </div>
-            </div>
-        `;
-        chatBox.scrollTop = chatBox.scrollHeight;
-        btn.disabled = true;
-
-        try {
-            const response = await fetch(`${API_BASE}/query`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    question: question,
-                    session_id: USER_SESSION_ID // 👈 Session Tracking Attached
-                })
-            });
-            
-            const data = await response.json();
-            document.getElementById(loadingId).remove(); // Drop loading indicator
-
-            if (response.ok) {
-                // Render Final Refined Answer Bubble
-                chatBox.innerHTML += `
-                    <div class="flex justify-start">
-                        <div class="bg-gray-800 border border-gray-700 text-gray-100 px-4 py-3 rounded-2xl rounded-tl-none max-w-xl shadow-md space-y-2">
-                            <p class="leading-relaxed text-gray-200">${data.answer}</p>
-                            <div class="pt-1.5 border-t border-gray-700/60 flex items-center justify-between text-[11px] font-mono text-gray-400">
-                                <span>🔍 Checked across database matrix</span>
-                                <span class="bg-gray-900 px-2 py-0.5 rounded text-blue-400 border border-gray-700">${data.sources_used || 4} context nodes used</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                throw new Error(data.detail || "Server rejected RAG execution framework request.");
+    
+        function appendChatBubble(text, sender, nodesCount = null) {
+            const bubble = document.createElement("div");
+            bubble.style.margin = "12px 0";
+            bubble.style.padding = "14px";
+            bubble.style.borderRadius = "8px";
+            bubble.style.fontSize = "14px";
+            bubble.style.lineHeight = "1.5";
+    
+            if (sender === "user") {
+                bubble.style.backgroundColor = "#2563eb";
+                bubble.style.color = "#ffffff";
+                bubble.style.alignSelf = "flex-end";
+                bubble.style.marginLeft = "20%";
+                bubble.innerText = text;
+            } else if (sender === "system") {
+                bubble.style.backgroundColor = "#1e293b";
+                bubble.style.color = "#cbd5e1";
+                bubble.style.border = "1px solid #334155";
+                
+                let sourceFooter = nodesCount ? `<div style="margin-top:8px; font-size:11px; color:#64748b; border-top:1px solid #334155; padding-top:6px;">🔍 Checked across database matrix | ${nodesCount} context nodes used</div>` : "";
+                bubble.innerHTML = `<div>${text}</div>${sourceFooter}`;
+            } else { // Error bubble
+                bubble.style.backgroundColor = "rgba(153, 27, 27, 0.15)";
+                bubble.style.color = "#f87171";
+                bubble.style.border = "1px solid #991b1b";
+                bubble.innerText = text;
             }
-        } catch (err) {
-            if (document.getElementById(loadingId)) {
-                document.getElementById(loadingId).remove();
+    
+            // Target your layout wrapper to hold chat elements
+            if (chatContainer) {
+                chatContainer.appendChild(bubble);
+                chatContainer.scrollTop = chatContainer.scrollHeight; // Auto scroll viewport
             }
-            chatBox.innerHTML += `
-                <div class="flex justify-start">
-                    <div class="bg-red-950/40 border border-red-900 text-red-400 px-4 py-2.5 rounded-2xl rounded-tl-none max-w-xl text-xs">
-                        ⚠️ Retrieval Failure: ${err.message}
-                    </div>
-                </div>
-            `;
-        } finally {
-            btn.disabled = false;
-            chatBox.scrollTop = chatBox.scrollHeight;
         }
-    }
+    
+        // 8. Wire Up Event Listeners to Buttons and Keyboard Actions
+        if (ingestBtn) ingestBtn.addEventListener("click", searchAndIngestData);
+        if (askBtn) askBtn.addEventListener("click", askEngineQuery);
+    
+        if (topicInput) {
+            topicInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchAndIngestData(); });
+        }
+        if (questionInput) {
+            questionInput.addEventListener("keypress", (e) => { if (e.key === "Enter") askEngineQuery(); });
+        }
     </script>
 </body>
 </html>
