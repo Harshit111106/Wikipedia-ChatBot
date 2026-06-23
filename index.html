@@ -125,21 +125,30 @@
         // 5. Core Action: Ingest Wikipedia Topic (Mapped directly to HTML onclick="ingestUrl()")
         async function ingestUrl() {
             const topic = topicInput.value.trim();
-            if (!topic) return alert("Please enter a valid Wikipedia topic or URL first!");
+    if (!topic) return alert("Please enter a valid Wikipedia topic or URL first!");
+
+    // ✨ SMART URL TRANSFORMER:
+    // If the user typed a plain keyword (like "ms dhoni"), turn it into a standard Wikipedia URL
+    let finalPayloadQuery = topic;
+    if (!topic.startsWith("http://") && !topic.startsWith("https://")) {
+        // Convert spaces to underscores (e.g., "ms dhoni" -> "ms_dhoni")
+        const formattedTopic = topic.replace(/\s+/g, '_');
+        finalPayloadQuery = `https://en.wikipedia.org/wiki/${formattedTopic}`;
+    }
+
+    // Update UI to show active loading state
+    ingestBtn.disabled = true;
+    ingestBtn.innerText = "Ingesting...";
     
-            // Update UI to show active loading state
-            ingestBtn.disabled = true;
-            ingestBtn.innerText = "Ingesting...";
-            
-            try {
-                const response = await fetch(`${API_BASE}/ingest`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        query: topic,               // Satisfies 'body -> query' Pydantic model
-                        session_id: USER_SESSION_ID  // Satisfies 'body -> session_id' Pydantic model
-                    })
-                });
+    try {
+        const response = await fetch(`${API_BASE}/ingest`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                query: finalPayloadQuery,   // Send the polished URL to the backend
+                session_id: USER_SESSION_ID 
+            })
+        });
     
                 if (!response.ok) {
                     const errorMsg = await handleServerError(response);
