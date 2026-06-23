@@ -1,10 +1,15 @@
 # app/services/rag_engine.py
+import os
+import tempfile
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-vector_store = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
+
+# ✨ FIX: Use the container's globally writeable /tmp partition to bypass permission checks
+PERSIST_DIR = os.path.join(tempfile.gettempdir(), "chroma_db")
+vector_store = Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings)
 
 def ingest_document(text: str, session_id: str):
     print(f"\n[DEBUG] ---> Starting ingestion for Session: {session_id}")
