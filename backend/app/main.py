@@ -1,59 +1,46 @@
+# app/main.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.services.manager import answer_user_query, ingest_wikipedia_by_query
 
-# 1. Initialize the FastAPI application
-app = FastAPI(
-    title="Wikipedia RAG Engine API",
-    description="Production-ready API endpoints for document ingestion and QA retrieval",
-    version="1.0.0"
-)
+app = FastAPI()
 
-# 2. Enable CORS (Cross-Origin Resource Sharing)
-# This allows your future frontend app to talk to this backend securely
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permits requests from any origin (perfect for development)
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 3. Define Pydantic Data Models for Request Validation
-class IngestRequest(BaseModel):
-    url: str
+# Crucial: Both models MUST explicitly require session_id strings
+class ScrapeRequest(BaseModel):
+    query: str
+    session_id: str
 
 class QueryRequest(BaseModel):
     question: str
+    session_id: str
 
-# 4. Root Endpoint (Health Check)
-@app.get("/")
-def read_root():
-    return {"status": "online", "message": "Wikipedia RAG API is running smoothly."}
-
-# 5. Ingestion Endpoint
-# Update your Pydantic model to expect a query string
-class IngestRequest(BaseModel):
-    query: str  # Changed from url to query
-
-# Update the endpoint logic
 @app.post("/api/ingest")
-def ingest_url(payload: IngestRequest):
-    """Takes a search topic, resolves it to a Wikipedia page, and embeds it."""
+def ingest_endpoint(payload: ScrapeRequest):
     try:
-        # Call our new query search-ingestion manager function
-        result = ingest_wikipedia_by_query(payload.query)
-        return result
+        print(f"\n[API ROUTE] Received Ingest URL/Query with Session: {payload.session_id}")
+        title = ingest_wikipedia_by_query(payload.query, payload.session_id)
+        return {"status": "success", "title": title}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# 6. Query / QA Endpoint
 @app.post("/api/query")
-def query_rag(payload: QueryRequest):
-    """Searches local ChromaDB for context and asks Groq to generate the final answer."""
+def query_endpoint(payload: QueryRequest):
     try:
-        result = answer_user_query(payload.question)
-        return result
+        print(f"\n[API ROUTE] Received User Chat Query with Session: {payload.session_id}")
+        answer = answer_user_query(payload.question, payload.session_id)
+        return {"answer": answer, "sources_used": 4}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

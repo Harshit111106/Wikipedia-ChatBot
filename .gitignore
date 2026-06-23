@@ -12,3 +12,5 @@ backend/.env
 # Ignore Mac system files everywhere
 .DS_Store
 **/.DS_Store
+
+chroma_db/

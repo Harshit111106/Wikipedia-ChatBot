@@ -1,23 +1,19 @@
 import requests
 from bs4 import BeautifulSoup
 
-def scrape_wikipedia(url: str) -> str:
-    """Scrapes raw text from a given Wikipedia URL, discarding styles and navigation text."""
-    headers = {"User-Agent": "WikiRAGEngine/1.0 (contact: email@example.com)"}
-    response = requests.get(url, headers=headers)
-    
+def scrape_wikipedia(url: str):
+    response = requests.get(url)
     if response.status_code != 200:
-        raise Exception(f"Failed to fetch Wikipedia page. Status code: {response.status_code}")
+        raise Exception("Failed to fetch Wikipedia page data")
         
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(response.content, 'html.parser')
     
-    # Target only the main article text area
-    content_div = soup.find(id="mw-content-text")
-    if not content_div:
-        raise Exception("Could not find main content text in the Wikipedia page.")
-        
-    # Extract paragraphs
-    paragraphs = content_div.find_all("p")
-    text_content = " ".join([p.get_text() for p in paragraphs if p.get_text().strip()])
+    # Extract the true Wikipedia article headline
+    title_element = soup.find('h1', id='firstHeading')
+    article_title = title_element.text if title_element else "Unknown Article"
     
-    return text_content
+    # Pull text content from all valid paragraphs
+    paragraphs = soup.find_all('p')
+    text_content = "\n".join([p.text for p in paragraphs if p.text.strip()])
+    
+    return {"title": article_title, "text": text_content}

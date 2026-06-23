@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wikipedia RAG Engine</title>
+
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         .loading-spinner {
@@ -52,6 +53,9 @@
             Search & Ingest Data
         </button>
 
+        <div id="status-container" style="padding: 10px; margin-bottom: 15px; background: #f0f4f8; border-left: 4px solid #007bff; border-radius: 4px;">
+            <span id="current-article-banner" style="font-weight: bold; color: #333;">Active Context: None (Please ingest a Wikipedia article)</span>
+        </div>
                 <div id="ingestStatus" class="hidden text-xs p-3 rounded-lg border"></div>
             </div>
         </div>
@@ -84,122 +88,141 @@
     </main>
 
     <script>
-        const API_BASE = "https://harshit-1106-wikipedia-rag-backend.hf.space/api";
-
-        async function ingestUrl() {
-    const urlInput = document.getElementById('wikiUrl');
-    const statusDiv = document.getElementById('ingestStatus');
-    const btn = document.getElementById('ingestBtn');
-    
-    if (!urlInput.value.trim()) {
-        alert("Please enter a valid topic or keyword first.");
-        return;
+    // 1. Establish session isolation tracking token using browser tab sessionStorage
+    if (!sessionStorage.getItem("wikipedia_rag_token")) {
+        const freshToken = "session_" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+        sessionStorage.setItem("wikipedia_rag_token", freshToken);
     }
+    const USER_SESSION_ID = sessionStorage.getItem("wikipedia_rag_token");
 
-    // UI State: Loading
-    btn.disabled = true;
-    btn.innerHTML = `<div class="loading-spinner"></div> Processing...`;
-    statusDiv.className = "text-xs p-3 rounded-lg border bg-blue-950/30 text-blue-400 border-blue-800";
-    statusDiv.innerText = "Searching Wikipedia, scraping text layers, and computing local embeddings...";
-    statusDiv.classList.remove('hidden');
+    // Unified Live Backend Base Endpoint
+    const API_BASE = "https://harshit-1106-wikipedia-rag-backend.hf.space/api";
 
-    try {
-        const response = await fetch(`${API_BASE}/ingest`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: urlInput.value.trim() }) // 👈 Changed key from 'url' to 'query'
-        });
+    // 2. Dynamic Search & Ingestion Controller
+    async function ingestUrl() {
+        const urlInput = document.getElementById('wikiUrl');
+        const statusDiv = document.getElementById('ingestStatus');
+        const btn = document.getElementById('ingestBtn');
         
-        const data = await response.json();
-        
-        if (response.ok) {
-            statusDiv.className = "text-xs p-3 rounded-lg border bg-green-950/40 text-green-400 border-green-800";
-            statusDiv.innerText = `✅ ${data.message || 'Ingestion complete!'}`;
-            urlInput.value = ""; // Clear input on success
-        } else {
-            throw new Error(data.detail || "Server threw an unexpected ingestion fault.");
+        if (!urlInput.value.trim()) {
+            alert("Please enter a valid topic or keyword first.");
+            return;
         }
-    } catch (err) {
-        statusDiv.className = "text-xs p-3 rounded-lg border bg-red-950/40 text-red-400 border-red-800";
-        statusDiv.innerText = `❌ Error: ${err.message}`;
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = "Search & Ingest Data"; // 👈 Updated UI label fallback text
+
+        // UI State: Loading
+        btn.disabled = true;
+        btn.innerHTML = `<div class="loading-spinner"></div> Processing...`;
+        statusDiv.className = "text-xs p-3 rounded-lg border bg-blue-950/30 text-blue-400 border-blue-800";
+        statusDiv.innerText = "Searching Wikipedia, scraping text layers, and computing local embeddings...";
+        statusDiv.classList.remove('hidden');
+
+        try {
+            const response = await fetch(`${API_BASE}/ingest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    query: urlInput.value.trim(),
+                    session_id: USER_SESSION_ID // 👈 Session Tracking Attached
+                }) 
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                statusDiv.className = "text-xs p-3 rounded-lg border bg-green-950/40 text-green-400 border-green-800";
+                // Uses the dynamic title returned from backend if available, fallback to message
+                statusDiv.innerText = data.title ? `Active Context: 📖 ${data.title}` : `✅ ${data.message || 'Ingestion complete!'}`;
+                urlInput.value = ""; // Clear input on success
+            } else {
+                throw new Error(data.detail || "Server threw an unexpected ingestion fault.");
+            }
+        } catch (err) {
+            statusDiv.className = "text-xs p-3 rounded-lg border bg-red-950/40 text-red-400 border-red-800";
+            statusDiv.innerText = `❌ Error: ${err.message}`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = "Search & Ingest Data"; 
+        }
     }
-}
 
-        async function sendQuery() {
-            const questionInput = document.getElementById('userQuestion');
-            const chatBox = document.getElementById('chatBox');
-            const btn = document.getElementById('queryBtn');
-            const question = questionInput.value.trim();
+    // 3. Isolated Contextual Query Controller
+    async function sendQuery() {
+        const questionInput = document.getElementById('userQuestion');
+        const chatBox = document.getElementById('chatBox');
+        const btn = document.getElementById('queryBtn');
+        const question = questionInput.value.trim();
 
-            if (!question) return;
+        if (!question) return;
 
-            // 1. Render User Question Bubble
-            chatBox.innerHTML += `
-                <div class="flex justify-end">
-                    <div class="bg-blue-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-none max-w-xl shadow-md">
-                        ${question}
-                    </div>
+        // Render User Question Bubble
+        chatBox.innerHTML += `
+            <div class="flex justify-end">
+                <div class="bg-blue-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-none max-w-xl shadow-md">
+                    ${question}
                 </div>
-            `;
-            questionInput.value = ""; // Instant input wipe
-            chatBox.scrollTop = chatBox.scrollHeight;
+            </div>
+        `;
+        questionInput.value = ""; // Instant input wipe
+        chatBox.scrollTop = chatBox.scrollHeight;
 
-            // 2. Render Loading Template Placeholder
-            const loadingId = 'load-' + Date.now();
-            chatBox.innerHTML += `
-                <div class="flex justify-start items-center gap-3" id="${loadingId}">
-                    <div class="bg-gray-800 border border-gray-700 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-none max-w-xl flex items-center gap-3 shadow-md">
-                        <div class="loading-spinner"></div>
-                        <span class="text-xs text-gray-400 font-mono animate-pulse">Retrieving vector contexts...</span>
-                    </div>
+        // Render Loading Template Placeholder
+        const loadingId = 'load-' + Date.now();
+        chatBox.innerHTML += `
+            <div class="flex justify-start items-center gap-3" id="${loadingId}">
+                <div class="bg-gray-800 border border-gray-700 text-gray-300 px-4 py-3 rounded-2xl rounded-tl-none max-w-xl flex items-center gap-3 shadow-md">
+                    <div class="loading-spinner"></div>
+                    <span class="text-xs text-gray-400 font-mono animate-pulse">Retrieving vector contexts...</span>
                 </div>
-            `;
-            chatBox.scrollTop = chatBox.scrollHeight;
-            btn.disabled = true;
+            </div>
+        `;
+        chatBox.scrollTop = chatBox.scrollHeight;
+        btn.disabled = true;
 
-            try {
-                const response = await fetch(`${API_BASE}/query`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question })
-                });
-                
-                const data = await response.json();
-                document.getElementById(loadingId).remove(); // Drop loading indicator
+        try {
+            const response = await fetch(`${API_BASE}/query`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    question: question,
+                    session_id: USER_SESSION_ID // 👈 Session Tracking Attached
+                })
+            });
+            
+            const data = await response.json();
+            document.getElementById(loadingId).remove(); // Drop loading indicator
 
-                if (response.ok) {
-                    // 3. Render Final Refined Answer Bubble
-                    chatBox.innerHTML += `
-                        <div class="flex justify-start">
-                            <div class="bg-gray-800 border border-gray-700 text-gray-100 px-4 py-3 rounded-2xl rounded-tl-none max-w-xl shadow-md space-y-2">
-                                <p class="leading-relaxed text-gray-200">${data.answer}</p>
-                                <div class="pt-1.5 border-t border-gray-700/60 flex items-center justify-between text-[11px] font-mono text-gray-400">
-                                    <span>🔍 Checked across database matrix</span>
-                                    <span class="bg-gray-900 px-2 py-0.5 rounded text-blue-400 border border-gray-700">${data.sources_used} context nodes used</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    throw new Error(data.detail || "Server rejected RAG execution framework request.");
-                }
-            } catch (err) {
-                document.getElementById(loadingId).remove();
+            if (response.ok) {
+                // Render Final Refined Answer Bubble
                 chatBox.innerHTML += `
                     <div class="flex justify-start">
-                        <div class="bg-red-950/40 border border-red-900 text-red-400 px-4 py-2.5 rounded-2xl rounded-tl-none max-w-xl text-xs">
-                            ⚠️ Retrieval Failure: ${err.message}
+                        <div class="bg-gray-800 border border-gray-700 text-gray-100 px-4 py-3 rounded-2xl rounded-tl-none max-w-xl shadow-md space-y-2">
+                            <p class="leading-relaxed text-gray-200">${data.answer}</p>
+                            <div class="pt-1.5 border-t border-gray-700/60 flex items-center justify-between text-[11px] font-mono text-gray-400">
+                                <span>🔍 Checked across database matrix</span>
+                                <span class="bg-gray-900 px-2 py-0.5 rounded text-blue-400 border border-gray-700">${data.sources_used || 4} context nodes used</span>
+                            </div>
                         </div>
                     </div>
                 `;
-            } finally {
-                btn.disabled = false;
-                chatBox.scrollTop = chatBox.scrollHeight;
+            } else {
+                throw new Error(data.detail || "Server rejected RAG execution framework request.");
             }
+        } catch (err) {
+            if (document.getElementById(loadingId)) {
+                document.getElementById(loadingId).remove();
+            }
+            chatBox.innerHTML += `
+                <div class="flex justify-start">
+                    <div class="bg-red-950/40 border border-red-900 text-red-400 px-4 py-2.5 rounded-2xl rounded-tl-none max-w-xl text-xs">
+                        ⚠️ Retrieval Failure: ${err.message}
+                    </div>
+                </div>
+            `;
+        } finally {
+            btn.disabled = false;
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
+    }
     </script>
 </body>
 </html>
