@@ -53,8 +53,11 @@
                     Search & Ingest Data
                 </button>
 
-                <div id="status-container" class="p-3 bg-gray-900 border-l-4 border-blue-500 rounded-r-lg mt-2">
+                <div id="status-container" class="p-3 bg-gray-900 border-l-4 border-blue-500 rounded-r-lg mt-2 flex justify-between items-center">
                     <span id="current-article-banner" class="font-semibold text-xs text-gray-300">Active Context: None (Please ingest a Wikipedia article)</span>
+                    <button id="clearContextBtn" onclick="clearContext()" class="hidden text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1 rounded bg-red-950/30 hover:bg-red-950/50 border border-red-900 transition-colors cursor-pointer ml-2">
+                        Clear
+                    </button>
                 </div>
                 <div id="ingestStatus" class="hidden text-xs p-3 rounded-lg border"></div>
             </div>
@@ -125,44 +128,49 @@
         // 5. Core Action: Ingest Wikipedia Topic (Mapped directly to HTML onclick="ingestUrl()")
         async function ingestUrl() {
             const topic = topicInput.value.trim();
-    if (!topic) return alert("Please enter a valid Wikipedia topic or URL first!");
+            if (!topic) return alert("Please enter a valid Wikipedia topic or URL first!");
 
-    // ✨ SMART URL TRANSFORMER:
-    // If the user typed a plain keyword (like "ms dhoni"), turn it into a standard Wikipedia URL
-    let finalPayloadQuery = topic;
-    if (!topic.startsWith("http://") && !topic.startsWith("https://")) {
-        // Convert spaces to underscores (e.g., "ms dhoni" -> "ms_dhoni")
-        const formattedTopic = topic.replace(/\s+/g, '_');
-        finalPayloadQuery = `https://en.wikipedia.org/wiki/${formattedTopic}`;
-    }
+            // ✨ SMART URL TRANSFORMER:
+            // If the user typed a plain keyword (like "ms dhoni"), turn it into a standard Wikipedia URL
+            let finalPayloadQuery = topic;
+            if (!topic.startsWith("http://") && !topic.startsWith("https://")) {
+                // Convert spaces to underscores (e.g., "ms dhoni" -> "ms_dhoni")
+                const formattedTopic = topic.replace(/\s+/g, '_');
+                finalPayloadQuery = `https://en.wikipedia.org/wiki/${formattedTopic}`;
+            }
 
-    // Update UI to show active loading state
-    ingestBtn.disabled = true;
-    ingestBtn.innerText = "Ingesting...";
-    
-    try {
-        const response = await fetch(`${API_BASE}/ingest`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                query: finalPayloadQuery,   // Send the polished URL to the backend
-                session_id: USER_SESSION_ID 
-            })
-        });
-    
+            // Update UI to show active loading state
+            ingestBtn.disabled = true;
+            ingestBtn.innerText = "Ingesting...";
+            
+            try {
+                const response = await fetch(`${API_BASE}/ingest`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        query: finalPayloadQuery,   // Send the polished URL to the backend
+                        session_id: USER_SESSION_ID 
+                    })
+                });
+            
                 if (!response.ok) {
                     const errorMsg = await handleServerError(response);
                     throw new Error(errorMsg);
                 }
-    
+            
                 const data = await response.json();
                 
                 // Update the context banner on the UI dashboard
                 if (currentArticleBanner) {
-                    currentArticleBanner.innerText = `Active Context: ✅ ${topic.toUpperCase()}`;
+                    currentArticleBanner.innerText = `Active Context: ✅ ${data.title.toUpperCase()}`;
                 }
+                const clearBtn = document.getElementById("clearContextBtn");
+                if (clearBtn) clearBtn.classList.remove("hidden");
                 
-                alert(`Successfully found and ingested article: '${topic}'`);
+                // Clear input
+                topicInput.value = "";
+                
+                alert(`Successfully found and ingested article: '${data.title}'`);
                 
             } catch (error) {
                 console.error("Ingestion Fault:", error);
@@ -256,6 +264,62 @@
                 if (e.key === "Enter") ingestUrl(); 
             });
         }
+
+        // 8. Session Management & Cleanup Actions
+        async function checkSessionStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/session_status/${USER_SESSION_ID}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.title) {
+                        if (currentArticleBanner) {
+                            currentArticleBanner.innerText = `Active Context: ✅ ${data.title.toUpperCase()}`;
+                        }
+                        const clearBtn = document.getElementById("clearContextBtn");
+                        if (clearBtn) clearBtn.classList.remove("hidden");
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch session status:", e);
+            }
+        }
+
+        async function clearContext() {
+            if (!confirm("Are you sure you want to clear the active article and wipe its embeddings from the database?")) return;
+            try {
+                const response = await fetch(`${API_BASE}/cleanup`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ session_id: USER_SESSION_ID })
+                });
+                if (response.ok) {
+                    if (currentArticleBanner) {
+                        currentArticleBanner.innerText = "Active Context: None (Please ingest a Wikipedia article)";
+                    }
+                    const clearBtn = document.getElementById("clearContextBtn");
+                    if (clearBtn) clearBtn.classList.add("hidden");
+                    alert("Context cleared successfully!");
+                } else {
+                    throw new Error("Failed to clear context");
+                }
+            } catch (error) {
+                console.error("Cleanup error:", error);
+                alert(`❌ Error clearing context: ${error.message}`);
+            }
+        }
+
+        // Auto-cleanup on reload or closing of the tab/browser window
+        window.addEventListener("pagehide", () => {
+            fetch(`${API_BASE}/cleanup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: USER_SESSION_ID }),
+                keepalive: true
+            });
+        });
+
+        // Query session status on load to restore UI state
+        window.addEventListener("DOMContentLoaded", checkSessionStatus);
     </script>
 </body>
 </html>
