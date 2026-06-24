@@ -1,325 +1,725 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wikipedia RAG Engine</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WikiPulse AI — Wikipedia RAG Engine</title>
 
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
-        .loading-spinner {
-            border: 3px solid rgba(0, 0, 0, 0.1);
-            border-radius: 50%;
-            border-top: 3px solid #3b82f6;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg-base: #0B0F19;
+    --border-glass: rgba(255,255,255,0.09);
+    --violet: #8B5CF6;
+    --violet-glow: rgba(139,92,246,0.45);
+    --cyan: #22D3EE;
+    --cyan-glow: rgba(34,211,238,0.40);
+    --gradient-primary: linear-gradient(135deg, var(--violet) 0%, var(--cyan) 100%);
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --text-muted: #5B6576;
+    --success: #34D399;
+    --success-glow: rgba(52,211,153,0.40);
+    --danger: #FB7185;
+    --danger-glow: rgba(251,113,133,0.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  body{
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+    position: relative;
+    animation: pageFade .6s ease both;
+  }
+  @keyframes pageFade{ from{ opacity:0; } to{ opacity:1; } }
+
+  .font-display{ font-family:'Space Grotesk', sans-serif; }
+  .font-mono{ font-family:'JetBrains Mono', monospace; }
+
+  .bg-aurora::before, .bg-aurora::after{
+    content:''; position:fixed; border-radius:50%; filter: blur(120px);
+    opacity:.32; z-index:0; pointer-events:none;
+  }
+  .bg-aurora::before{ width:480px; height:480px; background:var(--violet); top:-140px; left:-140px; }
+  .bg-aurora::after{ width:520px; height:520px; background:var(--cyan); bottom:-180px; right:-120px; }
+
+  .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+
+  /* Glass surfaces */
+  .glass-nav{ background: rgba(11,15,25,0.72); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+  .glass-card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+    border: 1px solid var(--border-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  }
+
+  .eyebrow{ font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.12em; color:var(--cyan); font-weight:500; }
+  .grad-text{ background: var(--gradient-primary); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+  /* Logo orb signature */
+  .logo-orb{
+    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    background: var(--gradient-primary);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--bg-base);
+    position:relative;
+    box-shadow: 0 0 18px var(--violet-glow);
+  }
+  .logo-orb::before, .logo-orb::after{
+    content:''; position:absolute; border-radius:50%;
+    border:1px solid rgba(255,255,255,0.55); opacity:0;
+    animation: orbring 3s ease-out infinite;
+  }
+  .logo-orb::after{ animation-delay:1.5s; }
+  @keyframes orbring{ 0%{ inset:0; opacity:.65; } 100%{ inset:-16px; opacity:0; } }
+
+  .ping-dot{ position:relative; width:8px; height:8px; border-radius:50%; background: var(--success); flex-shrink:0; }
+  .ping-dot::before{
+    content:''; position:absolute; inset:-4px; border-radius:50%;
+    background:inherit; opacity:.65; animation: ping 1.8s cubic-bezier(0,0,.2,1) infinite;
+  }
+  @keyframes ping{ 0%{ transform:scale(1); opacity:.65; } 75%,100%{ transform:scale(2.4); opacity:0; } }
+
+  /* Inputs */
+  .input-glass{
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    transition: border-color .25s ease, box-shadow .25s ease;
+  }
+  .input-glass::placeholder{ color: var(--text-muted); }
+  .input-glass:focus{
+    outline:none; border-color: var(--cyan);
+    box-shadow: 0 0 0 3px rgba(34,211,238,0.15), 0 0 18px rgba(139,92,246,0.22);
+  }
+
+  /* Gradient button */
+  .btn-gradient{
+    background: var(--gradient-primary);
+    background-size: 160% 160%;
+    background-position: 0% 50%;
+    color: var(--bg-base);
+    transition: transform .22s ease, box-shadow .22s ease, background-position .45s ease;
+    box-shadow: 0 4px 20px var(--violet-glow);
+    border: none;
+  }
+  .btn-gradient:hover:not(:disabled){
+    transform: scale(1.02);
+    background-position: 100% 50%;
+    box-shadow: 0 6px 26px var(--cyan-glow);
+  }
+  .btn-gradient:active:not(:disabled){ transform: scale(0.98); }
+  .btn-gradient:disabled{ opacity:.7; cursor:not-allowed; transform:none; }
+  .btn-gradient:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+
+  /* Shimmer loading sweep on ingest card */
+  .shimmer-active{ position:relative; overflow:hidden; }
+  .shimmer-active::after{
+    content:''; position:absolute; top:0; left:-150%; width:150%; height:100%;
+    background: linear-gradient(100deg, transparent, rgba(139,92,246,0.16), rgba(34,211,238,0.16), transparent);
+    animation: shimmerSweep 1.6s ease-in-out infinite;
+  }
+  @keyframes shimmerSweep{ 0%{ left:-150%; } 100%{ left:150%; } }
+
+  /* Inline button spinner */
+  .spinner{
+    width:14px; height:14px; border-radius:50%; display:inline-block;
+    border:2px solid rgba(11,15,25,0.35); border-top-color: var(--bg-base);
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  /* Chat */
+  #chatBox::-webkit-scrollbar{ width:6px; }
+  #chatBox::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.15); border-radius:10px; }
+  #chatBox::-webkit-scrollbar-track{ background:transparent; }
+
+  .bubble-animate{ animation: bubbleIn .45s cubic-bezier(0.16,1,0.3,1) both; }
+  @keyframes bubbleIn{ from{ opacity:0; transform: translateY(14px); } to{ opacity:1; transform: translateY(0); } }
+
+  .bubble{ max-width: 78%; padding: .85rem 1rem; border-radius: 16px; font-size:.875rem; line-height:1.55; word-break: break-word; }
+  .bubble-user{ background: var(--gradient-primary); color: var(--bg-base); font-weight:500; border-radius: 16px 16px 4px 16px; }
+  .bubble-ai{ background: rgba(255,255,255,0.045); border:1px solid var(--border-glass); color: var(--text-primary); border-radius: 16px 16px 16px 4px; }
+  .bubble-error{ background: rgba(244,63,94,0.08); border:1px solid rgba(244,63,94,0.3); color:#FCA5A5; border-radius:16px 16px 16px 4px; }
+  .bubble-footer{ margin-top:.6rem; padding-top:.5rem; border-top:1px solid var(--border-glass); font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:.35rem; font-family:'JetBrains Mono', monospace; }
+
+  .ai-avatar{ width:30px; height:30px; border-radius:50%; background: var(--gradient-primary); display:flex; align-items:center; justify-content:center; flex-shrink:0; color: var(--bg-base); box-shadow: 0 0 12px var(--violet-glow); }
+  .user-avatar{ width:30px; height:30px; border-radius:50%; background: rgba(255,255,255,0.06); border:1px solid var(--border-glass); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:10px; font-weight:600; color: var(--text-secondary); font-family:'JetBrains Mono', monospace; }
+  .error-avatar{ width:30px; height:30px; border-radius:50%; background: rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.4); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#FB7185; }
+
+  .thinking-dots span{ width:6px; height:6px; border-radius:50%; background: var(--gradient-primary); display:inline-block; margin:0 2px; animation: dotPulse 1.2s ease-in-out infinite; }
+  .thinking-dots span:nth-child(2){ animation-delay:.15s; }
+  .thinking-dots span:nth-child(3){ animation-delay:.3s; }
+  @keyframes dotPulse{ 0%,80%,100%{ transform:scale(.6); opacity:.4; } 40%{ transform:scale(1); opacity:1; } }
+
+  .empty-orb{ width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; color: var(--cyan); background: rgba(139,92,246,0.08); border:1px solid var(--border-glass); }
+
+  /* Toasts */
+  #toastContainer{ position:fixed; top:1.1rem; right:1.1rem; left:1.1rem; z-index:100; display:flex; flex-direction:column; align-items:flex-end; gap:.7rem; pointer-events:none; }
+  @media (min-width:640px){ #toastContainer{ left:auto; max-width:380px; } }
+
+  .toast{
+    pointer-events:auto; position:relative; overflow:hidden; width:100%;
+    padding:.85rem 1rem; border-radius:14px;
+    background: linear-gradient(180deg, rgba(22,26,40,0.92), rgba(14,17,28,0.92));
+    border:1px solid var(--border-glass);
+    backdrop-filter: blur(16px);
+    display:flex; align-items:flex-start; gap:.6rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    animation: toastIn .35s cubic-bezier(0.16,1,0.3,1) both;
+  }
+  .toast.toast-out{ animation: toastOut .3s ease forwards; }
+  .toast.success{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 18px var(--success-glow); }
+  .toast.error{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 18px var(--danger-glow); }
+  .toast-accent{ position:absolute; left:0; top:0; bottom:0; width:3px; }
+  .toast-progress{ position:absolute; bottom:0; left:0; height:2px; }
+  @keyframes toastIn{ from{ opacity:0; transform: translateX(24px) scale(.96); } to{ opacity:1; transform: translateX(0) scale(1); } }
+  @keyframes toastOut{ from{ opacity:1; transform: translateX(0); } to{ opacity:0; transform: translateX(24px); } }
+  @keyframes toastProgress{ from{ width:100%; } to{ width:0%; } }
+
+  /* Confirm modal */
+  #confirmOverlay{
+    position:fixed; inset:0; background: rgba(5,7,12,0.65); backdrop-filter: blur(4px);
+    display:flex; align-items:center; justify-content:center; z-index:110; padding:1rem;
+    opacity:0; pointer-events:none; transition: opacity .25s ease;
+  }
+  #confirmOverlay.active{ opacity:1; pointer-events:auto; }
+  #confirmOverlay .modal-card{ transform: scale(.94) translateY(8px); transition: transform .25s cubic-bezier(0.16,1,0.3,1); }
+  #confirmOverlay.active .modal-card{ transform: scale(1) translateY(0); }
+
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+  }
+</style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans">
+<body class="min-h-screen flex flex-col bg-aurora">
 
-    <header class="bg-gray-800 border-b border-gray-700 p-5 shadow-md">
-        <div class="max-w-5xl mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-blue-400 flex items-center gap-2">
-                🚀 Wikipedia RAG Brain
-            </h1>
-            <span class="bg-green-900/50 text-green-400 text-xs px-3 py-1 rounded-full border border-green-700 font-mono">
-                Backend: Connected (Port 8000)
-            </span>
+  <header class="sticky top-0 z-20 border-b border-white/5 glass-nav">
+    <div class="max-w-6xl mx-auto px-5 md:px-8 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="logo-orb">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.5 2.5a3.3 3.3 0 0 0-3.3 3.3v.5A3.3 3.3 0 0 0 4 9.5v1.4a3.3 3.3 0 0 0 1.3 6.3A3.3 3.3 0 0 0 8.6 20a1.9 1.9 0 0 0 1.9-1.9V5.8A3.3 3.3 0 0 0 9.5 2.5Z"/>
+            <path d="M14.5 2.5a3.3 3.3 0 0 1 3.3 3.3v.5A3.3 3.3 0 0 1 20 9.5v1.4a3.3 3.3 0 0 1-1.3 6.3A3.3 3.3 0 0 1 15.4 20a1.9 1.9 0 0 1-1.9-1.9V5.8a3.3 3.3 0 0 1 1-3.3Z"/>
+          </svg>
         </div>
-    </header>
-
-    <main class="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl h-fit">
-            <h2 class="text-lg font-semibold text-gray-200 mb-3">1. Knowledge Base Ingestion</h2>
-            <p class="text-gray-400 text-xs mb-4">Feed any Wikipedia URL or topic to the local vector engine database.</p>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-medium text-gray-400 mb-1">Wikipedia Topic / Keyword</label>
-                    <input type="text" id="wikiUrl" 
-                           placeholder="e.g., Space Shuttle, MS Dhoni, AI..." 
-                           class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors">
-                </div>
-                
-                <button onclick="ingestUrl()" id="ingestBtn" 
-                        class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm py-2 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 cursor-pointer">
-                    Search & Ingest Data
-                </button>
-
-                <div id="status-container" class="p-3 bg-gray-900 border-l-4 border-blue-500 rounded-r-lg mt-2 flex justify-between items-center">
-                    <span id="current-article-banner" class="font-semibold text-xs text-gray-300">Active Context: None (Please ingest a Wikipedia article)</span>
-                    <button id="clearContextBtn" onclick="clearContext()" class="hidden text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1 rounded bg-red-950/30 hover:bg-red-950/50 border border-red-900 transition-colors cursor-pointer ml-2">
-                        Clear
-                    </button>
-                </div>
-                <div id="ingestStatus" class="hidden text-xs p-3 rounded-lg border"></div>
-            </div>
+        <div>
+          <h1 class="font-display text-xl md:text-2xl font-semibold tracking-tight">WikiPulse <span class="grad-text">AI</span></h1>
+          <p class="text-[11px] hidden sm:block" style="color:var(--text-secondary)">Retrieval-grounded answers from Wikipedia</p>
         </div>
+      </div>
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10" style="background:rgba(255,255,255,0.03);">
+        <span class="ping-dot"></span>
+        <span class="text-xs font-mono" style="color:var(--text-secondary)">System Online</span>
+      </div>
+    </div>
+  </header>
 
-        <div class="md:col-span-2 bg-gray-800 rounded-xl border border-gray-700 shadow-xl flex flex-col h-[550px]">
-            <div class="p-4 border-b border-gray-700 bg-gray-800/50 rounded-t-xl">
-                <h2 class="text-lg font-semibold text-gray-200">2. Contextual Query Retrieval</h2>
-                <p class="text-gray-400 text-xs">Ask questions bound strictly to your ingested vector sources.</p>
-            </div>
+  <main class="relative z-10 max-w-6xl w-full mx-auto px-4 md:px-8 py-8 grid grid-cols-1 lg:grid-cols-5 gap-6 flex-1">
 
-            <div id="chatBox" class="flex-1 p-4 overflow-y-auto space-y-4 font-normal text-sm flex flex-col">
-                <div class="bg-blue-950/40 border border-blue-900 text-blue-300 p-4 rounded-xl max-w-xl self-start">
-                    👋 Welcome! Ingest a Wikipedia topic on the left, then ask me anything about it here. I will dynamically retrieve references and generate your answers.
-                </div>
-            </div>
+    <!-- LEFT: Ingestion -->
+    <section id="ingestCard" class="lg:col-span-2 glass-card p-6 h-fit lg:sticky lg:top-24">
+      <span class="eyebrow">STEP 01</span>
+      <h2 class="font-display text-lg font-semibold mt-1 mb-1">Knowledge Source</h2>
+      <p class="text-sm mb-5" style="color:var(--text-secondary)">Paste a Wikipedia link, or just type a topic — we'll resolve and format it for you.</p>
 
-            <div class="p-4 border-t border-gray-700 bg-gray-900/30 rounded-b-xl">
-                <div class="flex gap-2">
-                    <input type="text" id="userQuestion" 
-                           placeholder="Ask a question about the ingested topics..." 
-                           class="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition-colors">
-                    <button onclick="sendQuery()" id="queryBtn"
-                            class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors cursor-pointer">
-                        Ask Engine
-                    </button>
-                </div>
-            </div>
+      <label for="wikiUrl" class="block text-xs font-medium mb-1.5 uppercase tracking-wide" style="color:var(--text-muted)">Topic or URL</label>
+      <input type="text" id="wikiUrl"
+             placeholder="Try “MS Dhoni”, “Space Shuttle”…"
+             class="w-full px-3.5 py-2.5 rounded-xl text-sm input-glass mb-3">
+
+      <button onclick="ingestUrl()" id="ingestBtn"
+              class="btn-gradient w-full py-3 rounded-xl font-semibold text-sm flex justify-center items-center gap-2 cursor-pointer">
+        <span id="ingestBtnLabel">Ingest Knowledge</span>
+      </button>
+
+      <div id="status-container" class="mt-4 px-3.5 py-3 rounded-xl border flex items-center justify-between gap-2" style="background:rgba(255,255,255,0.025); border-color:var(--border-glass);">
+        <div class="flex items-center gap-2 min-w-0">
+          <span id="statusDot" class="w-2 h-2 rounded-full flex-shrink-0" style="background:var(--text-muted)"></span>
+          <span id="current-article-banner" class="text-xs truncate" style="color:var(--text-secondary)">No source ingested yet</span>
         </div>
-    </main>
+        <button id="clearContextBtn" onclick="clearContext()"
+                class="hidden flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                style="color:#FB7185; background:rgba(244,63,94,0.08); border:1px solid rgba(244,63,94,0.25);">
+          Clear
+        </button>
+      </div>
+      <div id="ingestStatus" class="hidden"></div>
+    </section>
 
-    <script>
-        // 1. Configuration: Point to your live Hugging Face backend API
-        const API_BASE = "https://harshit-1106-wikipedia-rag-backend.hf.space/api";
-    
-        // 2. Session Isolation: Generate or reuse a unique token specific to this single browser tab
-        if (!sessionStorage.getItem("user_session_id")) {
-            const uniqueId = "session_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
-            sessionStorage.setItem("user_session_id", uniqueId);
-        }
-        const USER_SESSION_ID = sessionStorage.getItem("user_session_id");
-        console.log("Current Active Session ID:", USER_SESSION_ID);
-    
-        // 3. DOM Elements mapped accurately to your HTML IDs
-        const topicInput = document.getElementById("wikiUrl"); 
-        const ingestBtn = document.getElementById("ingestBtn");
-        const currentArticleBanner = document.getElementById("current-article-banner");
-        
-        const questionInput = document.getElementById("userQuestion");
-        const askBtn = document.getElementById("queryBtn");
-        const chatContainer = document.getElementById("chatBox");
-    
-        // 4. Helper Function: Standardized Error Parsing
-        async function handleServerError(response) {
-            try {
-                const errorData = await response.json();
-                if (errorData.detail) {
-                    return typeof errorData.detail === 'object' 
-                        ? JSON.stringify(errorData.detail) 
-                        : errorData.detail;
-                }
-                return "An unmapped backend error occurred.";
-            } catch (e) {
-                return `Server returned status code: ${response.status}`;
-            }
-        }
-    
-        // 5. Core Action: Ingest Wikipedia Topic (Mapped directly to HTML onclick="ingestUrl()")
-        async function ingestUrl() {
-            const topic = topicInput.value.trim();
-            if (!topic) return alert("Please enter a valid Wikipedia topic or URL first!");
+    <!-- RIGHT: Chat -->
+    <section class="lg:col-span-3 glass-card flex flex-col h-[540px] lg:h-[600px]">
+      <div class="p-5 border-b border-white/5">
+        <span class="eyebrow">STEP 02</span>
+        <h2 class="font-display text-lg font-semibold mt-1">Ask the Brain</h2>
+        <p class="text-xs" style="color:var(--text-secondary)">Answers stay grounded in what you've ingested.</p>
+      </div>
 
-            // ✨ SMART URL TRANSFORMER:
-            // If the user typed a plain keyword (like "ms dhoni"), turn it into a standard Wikipedia URL
-            let finalPayloadQuery = topic;
-            if (!topic.startsWith("http://") && !topic.startsWith("https://")) {
-                // Convert spaces to underscores (e.g., "ms dhoni" -> "ms_dhoni")
-                const formattedTopic = topic.replace(/\s+/g, '_');
-                finalPayloadQuery = `https://en.wikipedia.org/wiki/${formattedTopic}`;
-            }
+      <div id="chatBox" class="flex-1 overflow-y-auto p-5 flex flex-col gap-4" aria-live="polite">
+        <div id="emptyState" class="flex-1 flex flex-col items-center justify-center text-center px-8 gap-3 m-auto">
+          <div class="empty-orb">
+            <svg width="32" height="32" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="24" cy="24" r="5"/>
+              <circle cx="24" cy="24" r="13" stroke-opacity="0.5"/>
+              <circle cx="24" cy="24" r="21" stroke-opacity="0.22"/>
+            </svg>
+          </div>
+          <p class="font-display text-base font-medium">Your AI brain is empty</p>
+          <p class="text-xs max-w-[230px]" style="color:var(--text-secondary)">Ingest a Wikipedia topic on the left, then ask anything about it here.</p>
+        </div>
+      </div>
 
-            // Update UI to show active loading state
-            ingestBtn.disabled = true;
-            ingestBtn.innerText = "Ingesting...";
-            
-            try {
-                const response = await fetch(`${API_BASE}/ingest`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        query: finalPayloadQuery,   // Send the polished URL to the backend
-                        session_id: USER_SESSION_ID 
-                    })
-                });
-            
-                if (!response.ok) {
-                    const errorMsg = await handleServerError(response);
-                    throw new Error(errorMsg);
-                }
-            
-                const data = await response.json();
-                
-                // Update the context banner on the UI dashboard
-                if (currentArticleBanner) {
-                    currentArticleBanner.innerText = `Active Context: ✅ ${data.title.toUpperCase()}`;
-                }
-                const clearBtn = document.getElementById("clearContextBtn");
-                if (clearBtn) clearBtn.classList.remove("hidden");
-                
-                // Clear input
-                topicInput.value = "";
-                
-                alert(`Successfully found and ingested article: '${data.title}'`);
-                
-            } catch (error) {
-                console.error("Ingestion Fault:", error);
-                alert(`❌ Error: ${error.message}`);
-            } finally {
-                ingestBtn.disabled = false;
-                ingestBtn.innerText = "Search & Ingest Data";
-            }
-        }
-    
-        // 6. Core Action: Query LLM Knowledge Base (Mapped directly to HTML onclick="sendQuery()")
-        async function sendQuery() {
-            const question = questionInput.value.trim();
-            if (!question) return;
-    
-            // Append user query message bubble into UI viewport
-            appendChatBubble(question, "user");
-            questionInput.value = ""; // Clear input immediately
-            
-            try {
-                const response = await fetch(`${API_BASE}/query`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        question: question,         // Satisfies 'body -> question'
-                        session_id: USER_SESSION_ID  // Satisfies 'body -> session_id'
-                    })
-                });
-    
-                if (!response.ok) {
-                    const errorMsg = await handleServerError(response);
-                    throw new Error(errorMsg);
-                }
-    
-                const data = await response.json();
-                
-                // Append system response answer bubble into UI viewport
-                appendChatBubble(data.answer, "system", data.sources_used || null);
-    
-            } catch (error) {
-                console.error("Query Fault:", error);
-                appendChatBubble(`❌ Request Failed: ${error.message}`, "system-error");
-            }
-        }
-    
-        // 7. UI Presentation Helper Methods
-        function appendChatBubble(text, sender, nodesCount = null) {
-            const bubble = document.createElement("div");
-            bubble.style.margin = "12px 0";
-            bubble.style.padding = "14px";
-            bubble.style.borderRadius = "12px";
-            bubble.style.fontSize = "14px";
-            bubble.style.lineHeight = "1.5";
-            bubble.style.maxWidth = "75%";
-    
-            if (sender === "user") {
-                bubble.style.backgroundColor = "#2563eb";
-                bubble.style.color = "#ffffff";
-                bubble.style.alignSelf = "flex-end";
-                bubble.innerText = text;
-            } else if (sender === "system") {
-                bubble.style.backgroundColor = "#1e293b";
-                bubble.style.color = "#cbd5e1";
-                bubble.style.border = "1px solid #334155";
-                bubble.style.alignSelf = "flex-start";
-                
-                let sourceFooter = nodesCount ? `<div style="margin-top:8px; font-size:11px; color:#64748b; border-top:1px solid #334155; padding-top:6px;">🔍 Context vector matrix references used</div>` : "";
-                bubble.innerHTML = `<div>${text}</div>${sourceFooter}`;
-            } else { // Error bubble
-                bubble.style.backgroundColor = "rgba(153, 27, 27, 0.15)";
-                bubble.style.color = "#f87171";
-                bubble.style.border = "1px solid #991b1b";
-                bubble.style.alignSelf = "flex-start";
-                bubble.innerText = text;
-            }
-    
-            if (chatContainer) {
-                chatContainer.appendChild(bubble);
-                chatContainer.scrollTop = chatContainer.scrollHeight; // Auto scroll viewport down
-            }
-        }
-    
-        // Wire up keyboard listener for Enter key on question input field
-        if (questionInput) {
-            questionInput.addEventListener("keypress", (e) => { 
-                if (e.key === "Enter") sendQuery(); 
-            });
-        }
-        if (topicInput) {
-            topicInput.addEventListener("keypress", (e) => { 
-                if (e.key === "Enter") ingestUrl(); 
-            });
-        }
+      <div class="p-4 border-t border-white/5">
+        <div class="flex gap-2">
+          <label for="userQuestion" class="sr-only">Ask a question</label>
+          <input type="text" id="userQuestion"
+                 placeholder="Ask a question about the ingested topic..."
+                 class="flex-1 px-4 py-3 rounded-xl text-sm input-glass">
+          <button onclick="sendQuery()" id="queryBtn" aria-label="Send question"
+                  class="btn-gradient px-5 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 flex-shrink-0 cursor-pointer">
+            <span class="hidden sm:inline">Ask</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
 
-        // 8. Session Management & Cleanup Actions
-        async function checkSessionStatus() {
-            try {
-                const response = await fetch(`${API_BASE}/session_status/${USER_SESSION_ID}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.title) {
-                        if (currentArticleBanner) {
-                            currentArticleBanner.innerText = `Active Context: ✅ ${data.title.toUpperCase()}`;
-                        }
-                        const clearBtn = document.getElementById("clearContextBtn");
-                        if (clearBtn) clearBtn.classList.remove("hidden");
-                    }
-                }
-            } catch (e) {
-                console.error("Failed to fetch session status:", e);
-            }
-        }
+  </main>
 
-        async function clearContext() {
-            if (!confirm("Are you sure you want to clear the active article and wipe its embeddings from the database?")) return;
-            try {
-                const response = await fetch(`${API_BASE}/cleanup`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ session_id: USER_SESSION_ID })
-                });
-                if (response.ok) {
-                    if (currentArticleBanner) {
-                        currentArticleBanner.innerText = "Active Context: None (Please ingest a Wikipedia article)";
-                    }
-                    const clearBtn = document.getElementById("clearContextBtn");
-                    if (clearBtn) clearBtn.classList.add("hidden");
-                    alert("Context cleared successfully!");
-                } else {
-                    throw new Error("Failed to clear context");
-                }
-            } catch (error) {
-                console.error("Cleanup error:", error);
-                alert(`❌ Error clearing context: ${error.message}`);
-            }
-        }
+  <p class="text-center text-[11px] mt-1 mb-6 px-4" style="color:var(--text-muted)">WikiPulse AI answers are generated from ingested Wikipedia content and may be incomplete or imprecise.</p>
 
-        // Auto-cleanup on reload or closing of the tab/browser window
-        window.addEventListener("pagehide", () => {
-            fetch(`${API_BASE}/cleanup`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ session_id: USER_SESSION_ID }),
-                keepalive: true
-            });
+  <!-- Toasts -->
+  <div id="toastContainer"></div>
+
+  <!-- Confirm modal -->
+  <div id="confirmOverlay">
+    <div class="modal-card glass-card w-full max-w-sm p-6">
+      <h3 id="confirmTitle" class="font-display text-base font-semibold mb-2">Clear knowledge base?</h3>
+      <p id="confirmMessage" class="text-sm mb-6" style="color:var(--text-secondary)">This removes the active article and wipes its embeddings from the database.</p>
+      <div class="flex gap-3 justify-end">
+        <button id="confirmCancelBtn" class="px-4 py-2 rounded-xl text-sm font-medium cursor-pointer transition-colors"
+                style="background:rgba(255,255,255,0.05); border:1px solid var(--border-glass); color:var(--text-secondary);">
+          Cancel
+        </button>
+        <button id="confirmActionBtn" class="px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer transition-colors"
+                style="background:var(--gradient-primary); color:var(--bg-base);">
+          Clear
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------------------------------------------------------
+    // 1. Configuration — points to the live FastAPI backend (unchanged)
+    // ---------------------------------------------------------------
+    const API_BASE = "https://harshit-1106-wikipedia-rag-backend.hf.space/api";
+
+    // ---------------------------------------------------------------
+    // 2. Session isolation — unchanged logic
+    // ---------------------------------------------------------------
+    if (!sessionStorage.getItem("user_session_id")) {
+      const uniqueId = "session_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+      sessionStorage.setItem("user_session_id", uniqueId);
+    }
+    const USER_SESSION_ID = sessionStorage.getItem("user_session_id");
+    console.log("Current Active Session ID:", USER_SESSION_ID);
+
+    // ---------------------------------------------------------------
+    // 3. DOM references (same IDs as before)
+    // ---------------------------------------------------------------
+    const topicInput = document.getElementById("wikiUrl");
+    const ingestBtn = document.getElementById("ingestBtn");
+    const ingestBtnLabel = document.getElementById("ingestBtnLabel");
+    const ingestCard = document.getElementById("ingestCard");
+    const currentArticleBanner = document.getElementById("current-article-banner");
+    const statusDot = document.getElementById("statusDot");
+    const clearBtn = document.getElementById("clearContextBtn");
+
+    const questionInput = document.getElementById("userQuestion");
+    const askBtn = document.getElementById("queryBtn");
+    const chatContainer = document.getElementById("chatBox");
+    const emptyState = document.getElementById("emptyState");
+
+    const toastContainer = document.getElementById("toastContainer");
+    const confirmOverlay = document.getElementById("confirmOverlay");
+    const confirmTitleEl = document.getElementById("confirmTitle");
+    const confirmMessageEl = document.getElementById("confirmMessage");
+    const confirmActionBtn = document.getElementById("confirmActionBtn");
+    const confirmCancelBtn = document.getElementById("confirmCancelBtn");
+
+    const ICONS = {
+      brain: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5a3.3 3.3 0 0 0-3.3 3.3v.5A3.3 3.3 0 0 0 4 9.5v1.4a3.3 3.3 0 0 0 1.3 6.3A3.3 3.3 0 0 0 8.6 20a1.9 1.9 0 0 0 1.9-1.9V5.8A3.3 3.3 0 0 0 9.5 2.5Z"/><path d="M14.5 2.5a3.3 3.3 0 0 1 3.3 3.3v.5A3.3 3.3 0 0 1 20 9.5v1.4a3.3 3.3 0 0 1-1.3 6.3A3.3 3.3 0 0 1 15.4 20a1.9 1.9 0 0 1-1.9-1.9V5.8a3.3 3.3 0 0 1 1-3.3Z"/></svg>`,
+      check: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>`,
+      alert: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><circle cx="12" cy="16" r="0.6" fill="currentColor"/></svg>`,
+      close: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`,
+      search: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>`,
+      errorMark: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.7 17.1A1.8 1.8 0 0 0 4.3 20h15.4a1.8 1.8 0 0 0 1.6-2.9L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/></svg>`
+    };
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ---------------------------------------------------------------
+    // 4. Toast notifications (replaces alert())
+    // ---------------------------------------------------------------
+    function showToast(message, type = "success", duration = 4200) {
+      const toast = document.createElement("div");
+      toast.className = `toast ${type}`;
+
+      const accentColor = type === "success" ? "var(--success)" : "var(--danger)";
+      const icon = type === "success" ? ICONS.check : ICONS.alert;
+      const iconColor = type === "success" ? "var(--success)" : "var(--danger)";
+
+      toast.innerHTML = `
+        <div class="toast-accent" style="background:${accentColor}"></div>
+        <div class="flex-shrink-0 mt-0.5" style="color:${iconColor}">${icon}</div>
+        <div class="flex-1 text-sm leading-snug pr-1" style="color:var(--text-primary)">${escapeHtml(message)}</div>
+        <button type="button" aria-label="Dismiss notification" class="flex-shrink-0 mt-0.5 transition-colors" style="color:var(--text-muted)">${ICONS.close}</button>
+        <div class="toast-progress" style="background:${accentColor}; animation: toastProgress ${duration}ms linear forwards;"></div>
+      `;
+
+      let timeoutId;
+      function dismiss() {
+        clearTimeout(timeoutId);
+        toast.classList.add("toast-out");
+        toast.addEventListener("animationend", () => toast.remove(), { once: true });
+      }
+      toast.querySelector("button").addEventListener("click", dismiss);
+      timeoutId = setTimeout(dismiss, duration);
+
+      toastContainer.appendChild(toast);
+    }
+
+    // ---------------------------------------------------------------
+    // 5. Confirm modal (replaces confirm())
+    // ---------------------------------------------------------------
+    let confirmCallback = null;
+    function showConfirm(title, message, onConfirm, confirmLabel = "Confirm") {
+      confirmTitleEl.textContent = title;
+      confirmMessageEl.textContent = message;
+      confirmActionBtn.textContent = confirmLabel;
+      confirmCallback = onConfirm;
+      confirmOverlay.classList.add("active");
+    }
+    function hideConfirm() {
+      confirmOverlay.classList.remove("active");
+      confirmCallback = null;
+    }
+    confirmCancelBtn.addEventListener("click", hideConfirm);
+    confirmOverlay.addEventListener("click", (e) => { if (e.target === confirmOverlay) hideConfirm(); });
+    confirmActionBtn.addEventListener("click", () => {
+      const cb = confirmCallback;
+      hideConfirm();
+      if (cb) cb();
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideConfirm(); });
+
+    // ---------------------------------------------------------------
+    // 6. Helper: standardized backend error parsing (unchanged)
+    // ---------------------------------------------------------------
+    async function handleServerError(response) {
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          return typeof errorData.detail === "object"
+            ? JSON.stringify(errorData.detail)
+            : errorData.detail;
+        }
+        return "An unmapped backend error occurred.";
+      } catch (e) {
+        return `Server returned status code: ${response.status}`;
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // 7. Smart Wikipedia title resolution
+    //    Tries Wikipedia's own OpenSearch API to resolve the correct,
+    //    correctly-capitalized canonical title (e.g. "ms dhoni" -> "MS Dhoni")
+    //    before falling back to a simple title-case + underscore guess.
+    // ---------------------------------------------------------------
+    function naiveTitleCase(str) {
+      return str.trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    }
+
+    async function resolveWikipediaTitle(rawInput) {
+      try {
+        const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(rawInput)}&limit=1&namespace=0&format=json&origin=*`;
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (Array.isArray(data) && Array.isArray(data[1]) && data[1].length > 0) {
+          return data[1][0];
+        }
+        return null;
+      } catch (e) {
+        console.warn("Wikipedia title resolution unavailable, using fallback:", e);
+        return null;
+      }
+    }
+
+    async function buildWikipediaUrl(topic) {
+      if (topic.startsWith("http://") || topic.startsWith("https://")) {
+        return topic;
+      }
+      const resolved = await resolveWikipediaTitle(topic);
+      const finalTitle = resolved || naiveTitleCase(topic);
+      return `https://en.wikipedia.org/wiki/${finalTitle.replace(/\s+/g, "_")}`;
+    }
+
+    // ---------------------------------------------------------------
+    // 8. UI state helpers
+    // ---------------------------------------------------------------
+    function setIngestLoading(isLoading) {
+      ingestBtn.disabled = isLoading;
+      ingestCard.classList.toggle("shimmer-active", isLoading);
+      ingestBtnLabel.innerHTML = isLoading
+        ? `<span class="spinner"></span> Resolving &amp; ingesting…`
+        : `Ingest Knowledge`;
+    }
+
+    function setActiveArticle(title) {
+      currentArticleBanner.textContent = `Active: ${title}`;
+      currentArticleBanner.style.color = "var(--text-primary)";
+      statusDot.style.background = "var(--success)";
+      statusDot.classList.add("ping-dot");
+      clearBtn.classList.remove("hidden");
+    }
+
+    function setNoActiveArticle() {
+      currentArticleBanner.textContent = "No source ingested yet";
+      currentArticleBanner.style.color = "var(--text-secondary)";
+      statusDot.style.background = "var(--text-muted)";
+      statusDot.classList.remove("ping-dot");
+      clearBtn.classList.add("hidden");
+    }
+
+    function hideEmptyState() {
+      if (emptyState && emptyState.parentNode) emptyState.remove();
+    }
+
+    // ---------------------------------------------------------------
+    // 9. Core Action: Ingest Wikipedia Topic — onclick="ingestUrl()"
+    // ---------------------------------------------------------------
+    async function ingestUrl() {
+      const topic = topicInput.value.trim();
+      if (!topic) {
+        showToast("Enter a Wikipedia topic or link first.", "error");
+        topicInput.focus();
+        return;
+      }
+
+      setIngestLoading(true);
+
+      try {
+        const finalPayloadQuery = await buildWikipediaUrl(topic);
+
+        const response = await fetch(`${API_BASE}/ingest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: finalPayloadQuery,
+            session_id: USER_SESSION_ID
+          })
         });
 
-        // Query session status on load to restore UI state
-        window.addEventListener("DOMContentLoaded", checkSessionStatus);
-    </script>
+        if (!response.ok) {
+          const errorMsg = await handleServerError(response);
+          throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        setActiveArticle(data.title);
+        topicInput.value = "";
+        showToast(`Ingested "${data.title}" successfully.`, "success");
+
+      } catch (error) {
+        console.error("Ingestion Fault:", error);
+        showToast(error.message || "Couldn't ingest that topic. Try again.", "error");
+      } finally {
+        setIngestLoading(false);
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // 10. Core Action: Query the knowledge base — onclick="sendQuery()"
+    // ---------------------------------------------------------------
+    async function sendQuery() {
+      const question = questionInput.value.trim();
+      if (!question) return;
+
+      appendChatBubble(question, "user");
+      questionInput.value = "";
+      askBtn.disabled = true;
+
+      const thinkingRow = appendThinkingBubble();
+
+      try {
+        const response = await fetch(`${API_BASE}/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: question,
+            session_id: USER_SESSION_ID
+          })
+        });
+
+        if (!response.ok) {
+          const errorMsg = await handleServerError(response);
+          throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        thinkingRow.remove();
+        appendChatBubble(data.answer, "system", data.sources_used ?? null);
+
+      } catch (error) {
+        console.error("Query Fault:", error);
+        thinkingRow.remove();
+        appendChatBubble(`Request failed: ${error.message}`, "system-error");
+        showToast(error.message || "Something went wrong answering that.", "error");
+      } finally {
+        askBtn.disabled = false;
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // 11. Chat rendering helpers
+    // ---------------------------------------------------------------
+    function appendThinkingBubble() {
+      hideEmptyState();
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.gap = "8px";
+      row.style.alignItems = "flex-end";
+      row.style.alignSelf = "flex-start";
+      row.classList.add("bubble-animate");
+      row.innerHTML = `
+        <div class="ai-avatar">${ICONS.brain}</div>
+        <div class="bubble bubble-ai"><span class="thinking-dots"><span></span><span></span><span></span></span></div>
+      `;
+      chatContainer.appendChild(row);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      return row;
+    }
+
+    function appendChatBubble(text, sender, sourcesUsed = null) {
+      hideEmptyState();
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.gap = "8px";
+      row.style.alignItems = "flex-end";
+      row.classList.add("bubble-animate");
+
+      if (sender === "user") {
+        row.style.alignSelf = "flex-end";
+        row.innerHTML = `
+          <div class="bubble bubble-user">${escapeHtml(text)}</div>
+          <div class="user-avatar">YOU</div>
+        `;
+      } else if (sender === "system") {
+        row.style.alignSelf = "flex-start";
+
+        let sourceLabel = "";
+        if (typeof sourcesUsed === "number") {
+          sourceLabel = `${sourcesUsed} source${sourcesUsed === 1 ? "" : "s"} referenced`;
+        } else if (Array.isArray(sourcesUsed)) {
+          sourceLabel = `${sourcesUsed.length} source${sourcesUsed.length === 1 ? "" : "s"} referenced`;
+        } else if (sourcesUsed) {
+          sourceLabel = "Grounded in your ingested source";
+        }
+
+        row.innerHTML = `
+          <div class="ai-avatar">${ICONS.brain}</div>
+          <div class="bubble bubble-ai">
+            <div>${escapeHtml(text)}</div>
+            ${sourceLabel ? `<div class="bubble-footer">${ICONS.search} ${sourceLabel}</div>` : ""}
+          </div>
+        `;
+      } else {
+        row.style.alignSelf = "flex-start";
+        row.innerHTML = `
+          <div class="error-avatar">${ICONS.errorMark}</div>
+          <div class="bubble bubble-error">${escapeHtml(text)}</div>
+        `;
+      }
+
+      chatContainer.appendChild(row);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // ---------------------------------------------------------------
+    // 12. Keyboard wiring (unchanged behavior)
+    // ---------------------------------------------------------------
+    if (questionInput) {
+      questionInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendQuery(); });
+    }
+    if (topicInput) {
+      topicInput.addEventListener("keypress", (e) => { if (e.key === "Enter") ingestUrl(); });
+    }
+
+    // ---------------------------------------------------------------
+    // 13. Session status + cleanup — onclick="clearContext()"
+    // ---------------------------------------------------------------
+    async function checkSessionStatus() {
+      try {
+        const response = await fetch(`${API_BASE}/session_status/${USER_SESSION_ID}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.title) setActiveArticle(data.title);
+        }
+      } catch (e) {
+        console.error("Failed to fetch session status:", e);
+      }
+    }
+
+    function clearContext() {
+      showConfirm(
+        "Clear knowledge base?",
+        "This removes the active article and wipes its embeddings from the database.",
+        async () => {
+          try {
+            const response = await fetch(`${API_BASE}/cleanup`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ session_id: USER_SESSION_ID })
+            });
+            if (!response.ok) throw new Error("Failed to clear context");
+            setNoActiveArticle();
+            showToast("Context cleared.", "success");
+          } catch (error) {
+            console.error("Cleanup error:", error);
+            showToast(error.message || "Couldn't clear context.", "error");
+          }
+        },
+        "Clear"
+      );
+    }
+
+    // Auto-cleanup on reload or closing of the tab/browser window (unchanged)
+    window.addEventListener("pagehide", () => {
+      fetch(`${API_BASE}/cleanup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: USER_SESSION_ID }),
+        keepalive: true
+      });
+    });
+
+    window.addEventListener("DOMContentLoaded", checkSessionStatus);
+  </script>
 </body>
 </html>
