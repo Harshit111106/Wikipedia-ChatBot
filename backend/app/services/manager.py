@@ -45,11 +45,11 @@ def answer_user_query(query: str, session_id: str):
     if not title:
         return "No active Wikipedia article found for this session. Please search and ingest an article first!"
         
-    # 2. Pull context ONLY from this specific user session's partition and active article
-    context = retrieve_context(query, session_id, title)
-    if not context:
+    # 2. Pull context chunks ONLY from this specific user session's partition and active article
+    chunks = retrieve_context(query, session_id, title)
+    if not chunks:
         return f"No context retrieved from the database for the article '{title}'. Please ingest it again."
         
-    # 3. Feed the query and isolated context to your LLM generator
-    answer = generate_answer(query, context)
+    # 3. Feed the query, article title, and isolated chunks to the LLM generator
+    answer = generate_answer(query, chunks, title)
     return answer

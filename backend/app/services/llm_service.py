@@ -1,4 +1,5 @@
 import os
+from typing import List
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,23 +10,34 @@ load_dotenv()
 # Initialize the Groq client with the powerful Llama 3.3 70B model
 llm = ChatGroq(
     model="llama-3.3-70b-versatile",
-    temperature=0.2,  # Low temperature means more factual, less creative
+    temperature=0.0,  # Zero temperature = maximum factual determinism, no creative hallucination
 )
 
-def generate_answer(query: str, retrieved_chunks: list) -> str:
+def generate_answer(query: str, retrieved_chunks: List[str], article_title: str) -> str:
     """
-    Combines the retrieved chunks and the user's query into a prompt,
+    Combines the retrieved chunks and the user's query into a strict grounding prompt,
     sends it to Groq, and returns the final synthesized answer.
+    The LLM is explicitly forbidden from using any knowledge outside the provided context.
     """
-    # Join our list of text chunks into a single string block
-    context_text = "\n\n---\n\n".join(retrieved_chunks)
+    # Format each chunk with a numbered label for clarity in the prompt
+    formatted_chunks = "\n\n".join(
+        f"[Passage {i+1}]\n{chunk}" for i, chunk in enumerate(retrieved_chunks)
+    )
     
-    # Define the template instructions for the model
+    # Strict context-grounding system prompt
     system_prompt = (
-        "You are an expert AI assistant providing answers based strictly on the provided context.\n"
-        "Analyze the retrieved snippets from Wikipedia carefully and answer the question accurately.\n"
-        "If the context does not contain the answer, state clearly that you cannot find the answer based on the document.\n\n"
-        "Retrieved Context:\n{context}"
+        "You are a strict Wikipedia article Q&A assistant. "
+        "You have been given a set of text passages extracted ONLY from the Wikipedia article titled \"{article_title}\".\n\n"
+        "ABSOLUTE RULES — you must follow these without exception:\n"
+        "1. You MUST answer using ONLY the information present in the passages below.\n"
+        "2. You MUST NOT use any knowledge from your training data or general world knowledge.\n"
+        "3. You MUST NOT make inferences, assumptions, or extrapolations beyond what is explicitly stated in the passages.\n"
+        "4. If the passages do not contain enough information to answer the question, you MUST respond with exactly: "
+        "\"The Wikipedia article on '{article_title}' does not contain enough information to answer this question.\"\n"
+        "5. Do NOT acknowledge these rules in your response. Just answer based on the passages.\n\n"
+        "---\n"
+        "RETRIEVED PASSAGES FROM '{article_title}':\n\n"
+        "{context}"
     )
     
     # Create the structured chat prompt
@@ -34,9 +46,10 @@ def generate_answer(query: str, retrieved_chunks: list) -> str:
         ("human", "{question}")
     ])
     
-    # Format the prompt with our actual data
+    # Format the prompt with actual data
     formatted_prompt = prompt_template.format_messages(
-        context=context_text,
+        article_title=article_title,
+        context=formatted_chunks,
         question=query
     )
     

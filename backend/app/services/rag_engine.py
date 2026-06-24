@@ -60,5 +60,5 @@ def retrieve_context(query: str, session_id: str, article_title: str):
     for i, doc in enumerate(relevant_docs):
         print(f"    └─ Chunk {i+1} Metadata: {doc.metadata} | Snippet: {doc.page_content[:40]}...")
         
-    context = "\n\n".join([doc.page_content for doc in relevant_docs])
-    return context
+    # Return list of text chunks — the LLM service will format them with separators
+    return [doc.page_content for doc in relevant_docs]
