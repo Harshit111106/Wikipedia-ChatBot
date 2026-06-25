@@ -107,25 +107,19 @@ def retrieve_context(query: str, session_id: str, article_title: str) -> List[st
 
 
 def retrieve_images(query: str, session_id: str, article_title: str,
-                    score_threshold: float = 1.0) -> List[Dict[str, str]]:
+                    score_threshold: float = 1.5) -> List[Dict[str, str]]:
     """
-    Find image captions semantically similar to the query.
+    Find candidate image captions semantically similar to the query.
 
-    All clean image captions stored for this session are evaluated.
-    There is NO hard cap on the number of results — only captions whose
-    embedding L2 distance to the query is ≤ score_threshold are returned.
-    (L2: 0 = identical, ~1.2 = loosely related, >1.5 = unrelated)
-
-    Noise images were already filtered at ingestion time by _is_noise_image()
-    in scraper.py, so every candidate here is a legitimate article illustration.
+    Uses a loose threshold (1.5) and a cap of 15 candidates.
+    These are just candidates — the LLM will perform the final rigorous 
+    filtration to decide which of these images truly answer the query.
     """
-    print(f"\n[DEBUG] ---> Querying image captions for Session: {session_id} | Query: '{query}'")
+    print(f"\n[DEBUG] ---> Querying image candidates for Session: {session_id} | Query: '{query}'")
 
-    # k=100 is generous enough to cover any Wikipedia article's image count.
-    # The score_threshold (not k) is what determines how many we actually return.
     results_with_scores = vector_store.similarity_search_with_score(
         query,
-        k=100,
+        k=15,
         filter={
             "$and": [
                 {"session_id": session_id},
@@ -144,5 +138,5 @@ def retrieve_images(query: str, session_id: str, article_title: str,
                 "caption": doc.page_content,
             })
 
-    print(f"[DEBUG] ---> {len(matched)} image(s) passed relevance threshold ({score_threshold})")
+    print(f"[DEBUG] ---> {len(matched)} image(s) passed candidate threshold ({score_threshold})")
     return matched

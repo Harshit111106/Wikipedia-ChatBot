@@ -62,10 +62,15 @@ def answer_user_query(query: str, session_id: str) -> Dict:
             "images": [],
         }
 
-    # 3. Retrieve relevant images (runs in parallel with step 2 logically)
-    matched_images = retrieve_images(query, session_id, title)
+    # 3. Retrieve candidate images (uses loose semantic search)
+    candidate_images = retrieve_images(query, session_id, title)
 
-    # 4. Generate the answer from strictly the retrieved chunks
-    answer = generate_answer(query, chunks, title)
+    # 4. Generate the answer and strictly filter images via LLM JSON response
+    response_data = generate_answer(query, chunks, title, candidate_images)
+    answer = response_data.get("answer", "")
+    relevant_urls = set(response_data.get("relevant_image_urls", []))
 
-    return {"answer": answer, "images": matched_images}
+    # 5. Filter the original candidate images down to only those the LLM explicitly kept
+    final_images = [img for img in candidate_images if img["url"] in relevant_urls]
+
+    return {"answer": answer, "images": final_images}
