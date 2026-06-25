@@ -107,19 +107,25 @@ def retrieve_context(query: str, session_id: str, article_title: str) -> List[st
 
 
 def retrieve_images(query: str, session_id: str, article_title: str,
-                    top_k: int = 3, score_threshold: float = 1.2) -> List[Dict[str, str]]:
+                    score_threshold: float = 1.2) -> List[Dict[str, str]]:
     """
     Find image captions semantically similar to the query.
-    Returns a list of {url, caption} dicts whose L2 distance < score_threshold.
 
-    A lower L2 distance = more similar. Typical range: 0 (identical) – 2+ (unrelated).
-    score_threshold=1.2 keeps only genuinely relevant matches.
+    All clean image captions stored for this session are evaluated.
+    There is NO hard cap on the number of results — only captions whose
+    embedding L2 distance to the query is ≤ score_threshold are returned.
+    (L2: 0 = identical, ~1.2 = loosely related, >1.5 = unrelated)
+
+    Noise images were already filtered at ingestion time by _is_noise_image()
+    in scraper.py, so every candidate here is a legitimate article illustration.
     """
     print(f"\n[DEBUG] ---> Querying image captions for Session: {session_id} | Query: '{query}'")
 
+    # k=100 is generous enough to cover any Wikipedia article's image count.
+    # The score_threshold (not k) is what determines how many we actually return.
     results_with_scores = vector_store.similarity_search_with_score(
         query,
-        k=top_k,
+        k=100,
         filter={
             "$and": [
                 {"session_id": session_id},
@@ -131,12 +137,12 @@ def retrieve_images(query: str, session_id: str, article_title: str,
 
     matched: List[Dict[str, str]] = []
     for doc, score in results_with_scores:
-        print(f"[DEBUG] ---> Image candidate: score={score:.3f} | caption='{doc.page_content[:60]}...'")
+        print(f"[DEBUG] ---> Image candidate: score={score:.3f} | caption='{doc.page_content[:65]}...'")
         if score <= score_threshold:
             matched.append({
                 "url": doc.metadata.get("image_url", ""),
                 "caption": doc.page_content,
             })
 
-    print(f"[DEBUG] ---> {len(matched)} image(s) passed the relevance threshold")
+    print(f"[DEBUG] ---> {len(matched)} image(s) passed relevance threshold ({score_threshold})")
     return matched
