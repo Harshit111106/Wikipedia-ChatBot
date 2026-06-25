@@ -584,7 +584,7 @@
 
         const data = await response.json();
         thinkingRow.remove();
-        appendChatBubble(data.answer, "system", data.sources_used ?? null);
+        appendChatBubble(data.answer, "system", data.sources_used ?? null, data.images ?? []);
 
       } catch (error) {
         console.error("Query Fault:", error);
@@ -616,7 +616,7 @@
       return row;
     }
 
-    function appendChatBubble(text, sender, sourcesUsed = null) {
+    function appendChatBubble(text, sender, sourcesUsed = null, images = []) {
       hideEmptyState();
       const row = document.createElement("div");
       row.style.display = "flex";
@@ -642,10 +642,49 @@
           sourceLabel = "Grounded in your ingested source";
         }
 
+        // Build image gallery HTML if any images matched
+        let imageGalleryHtml = "";
+        if (images && images.length > 0) {
+          const imgCards = images.map(img => `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <img
+                src="${img.url}"
+                alt="${escapeHtml(img.caption)}"
+                onerror="this.parentElement.style.display='none'"
+                style="max-width:220px;max-height:180px;width:auto;height:auto;
+                       border-radius:8px;border:1px solid rgba(255,255,255,0.12);
+                       object-fit:cover;background:#1e293b;"
+              />
+              <span style="font-size:11px;color:#94a3b8;text-align:center;max-width:220px;line-height:1.4;">
+                ${escapeHtml(img.caption)}
+              </span>
+            </div>
+          `).join("");
+
+          imageGalleryHtml = `
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
+              <div style="font-size:11px;color:#64748b;margin-bottom:8px;
+                          display:flex;align-items:center;gap:4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                Relevant image${images.length > 1 ? "s" : ""} from article
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                ${imgCards}
+              </div>
+            </div>
+          `;
+        }
+
         row.innerHTML = `
           <div class="ai-avatar">${ICONS.brain}</div>
           <div class="bubble bubble-ai">
             <div>${escapeHtml(text)}</div>
+            ${imageGalleryHtml}
             ${sourceLabel ? `<div class="bubble-footer">${ICONS.search} ${sourceLabel}</div>` : ""}
           </div>
         `;

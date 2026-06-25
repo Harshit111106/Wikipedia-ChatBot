@@ -39,8 +39,12 @@ def ingest_endpoint(payload: ScrapeRequest):
 def query_endpoint(payload: QueryRequest):
     try:
         print(f"\n[API ROUTE] Received User Chat Query with Session: {payload.session_id}")
-        answer = answer_user_query(payload.question, payload.session_id)
-        return {"answer": answer, "sources_used": 4}
+        result = answer_user_query(payload.question, payload.session_id)
+        return {
+            "answer": result["answer"],
+            "images": result.get("images", []),
+            "sources_used": 5,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
