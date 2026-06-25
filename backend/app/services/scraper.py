@@ -84,10 +84,8 @@ def _extract_main_text(soup: BeautifulSoup) -> str:
       1. Locate #mw-content-text (or fall back to #bodyContent / <body>).
       2. Decompose known noise elements (navboxes, TOC, reference lists,
          [edit] buttons, citation superscripts, maintenance banners, scripts).
-      3. Call .get_text() on the cleaned subtree.
-         Because get_text() walks every child node recursively, text inside
-         <a> links, <li> items, <h2-h4> headings, <dt>/<dd> definitions,
-         infobox <td>/<th> cells — everything — is captured automatically.
+      3. Insert newlines around block elements so paragraphs/lists are separated,
+         while inline elements (like <a> links) remain seamlessly part of their sentence.
     """
     content = (
         soup.find("div", id="mw-content-text")
@@ -129,10 +127,27 @@ def _extract_main_text(soup: BeautifulSoup) -> str:
         el.decompose()
 
     # ── text extraction ───────────────────────────────────────────────────────
-    raw = content.get_text(separator="\n", strip=True)
+    # Replace <br> with newline
+    for br in content.find_all("br"):
+        br.replace_with("\n")
+        
+    # Insert newlines around block elements so they form distinct paragraphs
+    block_elements = ["p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table", "tr", "ul", "ol", "dl", "dt", "dd"]
+    for block in content.find_all(block_elements):
+        block.insert_before("\n")
+        block.insert_after("\n")
 
-    # Collapse runs of 3+ blank lines → single blank line
-    text = re.sub(r"\n{3,}", "\n\n", raw)
+    # Get raw text without stripping (so inline spaces survive)
+    raw = content.get_text(separator="", strip=False)
+    
+    # Clean up whitespace:
+    # 1. Split into lines and strip edge whitespace
+    # 2. Collapse internal runs of spaces within each line
+    # 3. Rejoin with newlines and collapse multiple newlines
+    lines = [line.strip() for line in raw.split("\n")]
+    cleaned_lines = [re.sub(r"\s+", " ", line) for line in lines if line.strip()]
+    
+    text = "\n\n".join(cleaned_lines)
     return text.strip()
 
 
