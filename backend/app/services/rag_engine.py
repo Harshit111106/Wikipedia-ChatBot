@@ -107,7 +107,7 @@ def retrieve_context(query: str, session_id: str, article_title: str) -> List[st
 
 
 def retrieve_images(query: str, session_id: str, article_title: str,
-                    score_threshold: float = 1.2) -> List[Dict[str, str]]:
+                    score_threshold: float = 1.0) -> List[Dict[str, str]]:
     """
     Find image captions semantically similar to the query.
 
